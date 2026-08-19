@@ -19,6 +19,59 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     return vr::VRInitError_None;
 }
 
+void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
+    if (std::strcmp(pchComponentNameAndVersion, vr::IVRDisplayComponent_Version) == 0) {
+        return static_cast<vr::IVRDisplayComponent*>(this);
+    }
+    return nullptr;
+}
+
+// Display Component Implementation
+void HMDDeviceDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
+    *pnX = 0;
+    *pnY = 0;
+    *pnWidth = 2532;
+    *pnHeight = 1170;
+}
+
+void HMDDeviceDriver::GetIsOnDesktop(bool* pbIsOnDesktop) {
+    *pbIsOnDesktop = true;
+}
+
+void HMDDeviceDriver::GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t* pnHeight) {
+    *pnWidth = 1266;
+    *pnHeight = 1170;
+}
+
+void HMDDeviceDriver::GetEyeOutputViewport(vr::EVREye eEye, uint32_t* pnX, uint32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
+    *pnY = 0;
+    *pnWidth = 1266;
+    *pnHeight = 1170;
+    if (eEye == vr::Eye_Left) {
+        *pnX = 0;
+    } else {
+        *pnX = 1266;
+    }
+}
+
+void HMDDeviceDriver::GetProjectionRaw(vr::EVREye eEye, float* pfLeft, float* pfRight, float* pfTop, float* pfBottom) {
+    *pfLeft = -1.0f;
+    *pfRight = 1.0f;
+    *pfTop = -1.0f;
+    *pfBottom = 1.0f;
+}
+
+vr::HmdMatrix34_t HMDDeviceDriver::GetEyeToHeadTransform(vr::EVREye eEye) {
+    vr::HmdMatrix34_t mat{};
+    mat.m[0][0] = 1.0f;
+    mat.m[1][1] = 1.0f;
+    mat.m[2][2] = 1.0f;
+
+    float ipdOffset = 0.0315f;
+    mat.m[0][3] = (eEye == vr::Eye_Left) ? -ipdOffset : ipdOffset;
+    return mat;
+}
+
 void HMDDeviceDriver::UpdateHeadPose(const Vector3f& headPos, const Quaternionf& headRot) {
     m_pose.poseIsValid = true;
     m_pose.result = vr::TrackingResult_Running_OK;

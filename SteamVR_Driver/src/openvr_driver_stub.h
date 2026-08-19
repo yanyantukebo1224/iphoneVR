@@ -12,6 +12,7 @@ typedef uint32_t VRInputComponentHandle_t;
 typedef uint32_t TrackedDeviceIndex_t;
 
 static const char* const IServerTrackedDeviceProvider_Version = "IServerTrackedDeviceProvider_004";
+static const char* const IVRDisplayComponent_Version = "IVRDisplayComponent_003";
 
 enum ETrackedDeviceClass {
     TrackedDeviceClass_Invalid = 0,
@@ -37,6 +38,11 @@ enum ETrackingResult {
     TrackingResult_Calibrating_OutOfRange = 101,
     TrackingResult_Running_OK = 200,
     TrackingResult_Running_OutOfRange = 201,
+};
+
+enum EVREye {
+    Eye_Left = 0,
+    Eye_Right = 1
 };
 
 struct HmdVector3_t {
@@ -117,6 +123,13 @@ enum EVRInitError {
 };
 
 class IVRDriverContext;
+class ITrackedDeviceServerDriver;
+
+class IVRServerDriverHost {
+public:
+    virtual bool TrackedDeviceAdded(const char* pchDeviceSerialNumber, ETrackedDeviceClass eDeviceClass, ITrackedDeviceServerDriver* pDriver) = 0;
+    virtual void TrackedDevicePoseUpdated(uint32_t unWhichDevice, const DriverPose_t& newPose, uint32_t unPoseStructSize) = 0;
+};
 
 class IServerTrackedDeviceProvider {
 public:
@@ -138,6 +151,19 @@ public:
     virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) = 0;
     virtual DriverPose_t GetPose() = 0;
 };
+
+class IVRDisplayComponent {
+public:
+    virtual void GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) = 0;
+    virtual void GetIsOnDesktop(bool* pbIsOnDesktop) = 0;
+    virtual void GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t* pnHeight) = 0;
+    virtual void GetEyeOutputViewport(EVREye eEye, uint32_t* pnX, uint32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) = 0;
+    virtual void GetProjectionRaw(EVREye eEye, float* pfLeft, float* pfRight, float* pfTop, float* pfBottom) = 0;
+    virtual HmdMatrix34_t GetEyeToHeadTransform(EVREye eEye) = 0;
+    virtual bool ComputeDistortion(EVREye eEye, float fU, float fV, struct DistortionCoordinates_t* pDistortionCoordinates) { return false; }
+};
+
+extern IVRServerDriverHost* VRServerDriverHost();
 
 } // namespace vr
 

@@ -6,15 +6,32 @@
 #include <memory>
 #include <cstring>
 
+namespace vr {
+    static IVRServerDriverHost* g_pDriverHost = nullptr;
+    IVRServerDriverHost* VRServerDriverHost() {
+        return g_pDriverHost;
+    }
+}
+
 class ServerTrackedDeviceProvider : public vr::IServerTrackedDeviceProvider {
 public:
     ServerTrackedDeviceProvider() {}
     virtual ~ServerTrackedDeviceProvider() {}
 
     virtual vr::EVRInitError Init(vr::IVRDriverContext* pDriverContext) override {
+        // VRServerDriverHost のポインタを設定
+        vr::g_pDriverHost = (vr::IVRServerDriverHost*)pDriverContext;
+
         g_hmdDriver = std::make_unique<HMDDeviceDriver>();
         g_leftHandDriver = std::make_unique<HandControllerDriver>(vr::TrackedControllerRole_LeftHand);
         g_rightHandDriver = std::make_unique<HandControllerDriver>(vr::TrackedControllerRole_RightHand);
+
+        // 1) HMD を SteamVR のトラックデバイスに追加！ (これで HmdNotFound エラー解消)
+        if (vr::VRServerDriverHost()) {
+            vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_HMD_001", vr::TrackedDeviceClass_HMD, g_hmdDriver.get());
+            vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_LeftHand_001", vr::TrackedDeviceClass_Controller, g_leftHandDriver.get());
+            vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_RightHand_001", vr::TrackedDeviceClass_Controller, g_rightHandDriver.get());
+        }
 
         g_udpReceiver = std::make_unique<UDPReceiver>();
         g_udpReceiver->Start(9050, OnTrackingPacketReceived);
