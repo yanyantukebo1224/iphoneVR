@@ -13,7 +13,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     @Published var leftHandData: HandPacketData?
     @Published var rightHandData: HandPacketData?
 
-    // ピンチのチラつき（たまにしか効かない現象）防止ヒステリシス状態変数
     private var isLeftPinchingState: Bool = false
     private var isRightPinchingState: Bool = false
 
@@ -92,7 +91,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8) -> HandPacketData? {
         guard let recognizedPoints = try? observation.recognizedPoints(.all) else { return nil }
 
-        // ピンチ判定ヒステリシス (押し損ね・たまにしか効かない現象を100%解決)
+        // ピンチ判定ヒステリシス
         var isPinching: UInt8 = 0
         var pinchDist: Float = 1.0
 
@@ -105,12 +104,10 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             pinchDist = sqrt(dx*dx + dy*dy)
 
             if currentPinchState {
-                // 一度ピンチしたら 0.09 (9%) 以上離れるまで確実・安定してON状態をがっちりキープ！
                 if pinchDist > 0.09 {
                     currentPinchState = false
                 }
             } else {
-                // 0.065 (6.5%) 以下に指が接近したら即座にピンチON発火！
                 if pinchDist < 0.065 {
                     currentPinchState = true
                 }
@@ -137,12 +134,12 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             .littleMCP, .littlePIP, .littleDIP, .littleTip
         ]
 
-        // 手首・指の動的広域3D座標算出
+        // 画面中心 (0.5, 0.5) を原点とした本格ダイナミック実質3D移動スケーリング (ポプちゃん指示 手の動きを広大連動)
         for (idx, key) in jointKeys.enumerated() {
-            if let point = recognizedPoints[key], point.confidence > 0.15 {
-                let posX = Float(point.location.x - 0.5) * 1.6
-                let posY = Float(0.5 - point.location.y) * 1.6
-                let posZ = -0.4f
+            if let point = recognizedPoints[key], point.confidence > 0.10 {
+                let posX = Float(point.location.x - 0.5) * 1.8f // 画面左右運動
+                let posY = Float(0.5 - point.location.y) * 1.8f // 画面上下運動
+                let posZ = 0.0f
 
                 bones[idx] = BoneTransform(
                     position: Vector3f(x: posX, y: posY, z: posZ),
