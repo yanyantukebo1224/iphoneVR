@@ -4,6 +4,7 @@
 #include "openvr_driver.h"
 #include "tracking_protocol.h"
 #include <string>
+#include <chrono>
 
 class HandControllerDriver : public vr::ITrackedDeviceServerDriver {
 public:
@@ -17,7 +18,6 @@ public:
     virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
     virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
-    // 手位置 ＆ 指ジェスチャーコントローラー入力更新 (ポプちゃん指示 動作＆操作)
     void UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos);
     
     static void ConvertVision21ToSteamVR31(
@@ -31,13 +31,16 @@ private:
     uint32_t m_unObjectId;
     vr::PropertyContainerHandle_t m_ulPropertyContainer;
 
-    // SteamVR Input Components (トリガー・クリック・グリップ入力)
     vr::VRInputComponentHandle_t m_ulSkeletonComponent;
     vr::VRInputComponentHandle_t m_ulTriggerClickComponent;
     vr::VRInputComponentHandle_t m_ulTriggerValueComponent;
     vr::VRInputComponentHandle_t m_ulGripClickComponent;
 
     bool m_isTracked;
+
+    std::chrono::steady_clock::time_point m_lastMovementTime;
+    float m_lastPosition[3];
+    float m_smoothedPosition[3];
 };
 
 #endif // HAND_CONTROLLER_DRIVER_H
