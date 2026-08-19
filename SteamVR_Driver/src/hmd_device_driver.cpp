@@ -25,6 +25,8 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_HasDisplayComponent_Bool, true);
 
+    UpdateHeadPose(Vector3f{0.0f, 1.2f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
+
     return vr::VRInitError_None;
 }
 

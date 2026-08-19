@@ -8,9 +8,9 @@ HandControllerDriver::HandControllerDriver(vr::ETrackedControllerRole role)
       m_ulSkeletonComponent(vr::k_ulInvalidInputComponentHandle),
       m_isTracked(false) {
     std::memset(&m_pose, 0, sizeof(m_pose));
-    m_pose.poseIsValid = false;
+    m_pose.poseIsValid = true;
     m_pose.deviceIsConnected = true;
-    m_pose.result = vr::TrackingResult_Uninitialized;
+    m_pose.result = vr::TrackingResult_Running_OK;
     
     m_pose.qRotation.w = 1.0;
     m_pose.qWorldFromDriverRotation.w = 1.0;
@@ -28,7 +28,6 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, isLeft ? "vr_controller_05_left" : "vr_controller_05_right");
     vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
 
-    // SteamVR Skeletal Input Component の作成
     const char* skelPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
     vr::VRDriverInput()->CreateSkeletonComponent(
         m_ulPropertyContainer,
@@ -40,6 +39,14 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
         0,
         &m_ulSkeletonComponent
     );
+
+    float handX = isLeft ? -0.2f : 0.2f;
+    HandPacketData dummyHand{};
+    dummyHand.isTracked = 1;
+    dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{handX, 1.0f, -0.4f};
+    dummyHand.joints[VISION_JOINT_WRIST].orientation = Quaternionf{1.0f, 0.0f, 0.0f, 0.0f};
+
+    UpdateHandPose(dummyHand, Vector3f{0.0f, 1.2f, 0.0f});
 
     return vr::VRInitError_None;
 }
@@ -66,7 +73,6 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
-        // 31ボーン Skeletal Input 更新 (ポプちゃん指示 ① 実装)
         vr::VRBoneTransform_t bones[31];
         ConvertVision21ToSteamVR31(handData, bones);
         if (m_ulSkeletonComponent != vr::k_ulInvalidInputComponentHandle) {
@@ -105,7 +111,7 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
         dst.orientation.z = src.orientation.z;
     };
 
-    mapJoint(handData.joints[VISION_JOINT_WRIST], outBones[1]); // STEAMVR_BONE_WRIST
+    mapJoint(handData.joints[VISION_JOINT_WRIST], outBones[1]);
 
     struct FingerMap {
         int steamvr_start;
