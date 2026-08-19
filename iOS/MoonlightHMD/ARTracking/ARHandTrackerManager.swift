@@ -31,9 +31,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         session.pause()
     }
 
-    // ARSessionDelegate 60fps / 120fps コールバック
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        // 1) 6DoF カメラ (頭部) Transform 抽出
         let transform = frame.camera.transform
         let position = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
         let rotation = simd_quaternion(transform)
@@ -43,7 +41,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             self.headRotation = rotation
         }
 
-        // 2) カメラ画像 (capturedImage) を別スレッドで Vision に入力 (カメラ二重オープン回避)
         let pixelBuffer = frame.capturedImage
         processingQueue.async {
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
@@ -91,7 +88,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8) -> HandPacketData? {
         guard let recognizedPoints = try? observation.recognizedPoints(.all) else { return nil }
 
-        // ピンチ距離の判定 (Thumb Tip & Index Tip)
+        // 高感度＆高精度ピンチ判定
         var isPinching: UInt8 = 0
         var pinchDist: Float = 1.0
 
@@ -99,12 +96,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
             pinchDist = sqrt(dx*dx + dy*dy)
-            if pinchDist < 0.04 { // 4cm未満でピンチ判定
+            if pinchDist < 0.075 { // 指先接近で瞬時にピンチON！
                 isPinching = 1
             }
         }
 
-        // 21関節の抽出 helper
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
@@ -117,10 +113,15 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             .littleMCP, .littlePIP, .littleDIP, .littleTip
         ]
 
+        // 画面中心 (0.5, 0.5) を原点とした本格ダイナミック実寸3D座標変換
         for (idx, key) in jointKeys.enumerated() {
-            if let point = recognizedPoints[key], point.confidence > 0.3 {
+            if let point = recognizedPoints[key], point.confidence > 0.15 {
+                let posX = Float(point.location.x - 0.5) * 1.5 // 左右に動かすと広大に動く
+                let posY = Float(0.5 - point.location.y) * 1.5 // 上下に動かすと縦横無尽に動く
+                let posZ = -0.4f // 前方40cm
+
                 bones[idx] = BoneTransform(
-                    position: Vector3f(x: Float(point.location.x), y: Float(point.location.y), z: 0.5),
+                    position: Vector3f(x: posX, y: posY, z: posZ),
                     orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
                 )
             }

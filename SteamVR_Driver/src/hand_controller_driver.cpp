@@ -51,7 +51,7 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     float initX = isLeft ? -0.25f : 0.25f;
     HandPacketData dummyHand{};
     dummyHand.isTracked = 1;
-    dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{initX, 1.0f, -0.4f};
+    dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{initX, 0.0f, -0.4f};
     dummyHand.joints[VISION_JOINT_WRIST].orientation = Quaternionf{1.0f, 0.0f, 0.0f, 0.0f};
 
     UpdateHandPose(dummyHand, Vector3f{0.0f, 1.2f, 0.0f});
@@ -73,11 +73,15 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.result = vr::TrackingResult_Running_OK;
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
-    float defaultOffsetX = isLeft ? -0.25f : 0.25f;
+    float defaultOffsetX = isLeft ? -0.20f : 0.20f;
 
-    m_pose.vecPosition[0] = headPos.x + defaultOffsetX + (handData.joints[VISION_JOINT_WRIST].position.x * 0.5f);
-    m_pose.vecPosition[1] = headPos.y - 0.25f + (handData.joints[VISION_JOINT_WRIST].position.y * 0.5f);
-    m_pose.vecPosition[2] = headPos.z - 0.45f;
+    float hX = handData.joints[VISION_JOINT_WRIST].position.x;
+    float hY = handData.joints[VISION_JOINT_WRIST].position.y;
+    float hZ = handData.joints[VISION_JOINT_WRIST].position.z;
+
+    m_pose.vecPosition[0] = headPos.x + defaultOffsetX + hX;
+    m_pose.vecPosition[1] = headPos.y - 0.20f + hY;
+    m_pose.vecPosition[2] = headPos.z + hZ;
 
     m_pose.qRotation.w = handData.joints[VISION_JOINT_WRIST].orientation.w;
     m_pose.qRotation.x = handData.joints[VISION_JOINT_WRIST].orientation.x;
@@ -87,17 +91,17 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
-        bool isPinch = (handData.isPinching == 1);
-        float trigVal = isPinch ? 1.0f : 0.0f;
+        bool isPinchState = (handData.isPinching == 1);
+        float trigVal = isPinchState ? 1.0f : 0.0f;
 
         if (m_ulTriggerClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isPinch, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isPinchState, 0);
         }
         if (m_ulTriggerValueComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateScalarComponent(m_ulTriggerValueComponent, trigVal, 0);
         }
         if (m_ulGripClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isPinch, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isPinchState, 0);
         }
 
         vr::VRBoneTransform_t bones[31];
