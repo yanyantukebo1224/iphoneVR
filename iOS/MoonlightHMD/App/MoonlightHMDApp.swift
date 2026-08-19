@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct MoonlightHMDApp: App {
@@ -6,7 +7,12 @@ struct MoonlightHMDApp: App {
     @StateObject private var gestureProcessor = HandGestureProcessor()
     private let streamer = BinaryUDPStreamer()
 
-    @AppStorage("pc_target_ip") private var pcTargetIP: String = "192.168.1.100"
+    @AppStorage("pc_target_ip") private var pcTargetIP: String = "192.168.0.13"
+
+    init() {
+        // iPhone画面のスリープ（消灯）を絶対発生させない！
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -34,7 +40,7 @@ struct ContentView: View {
 
             VStack(spacing: 20) {
                 Text("Moonlight 6DoF & Hand Tracking HMD")
-                    .font(.title)
+                    .font(.title2)
                     .foregroundColor(.white)
                     .bold()
 
@@ -57,7 +63,7 @@ struct ContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Tracking Status:")
+                    Text("Tracking & Stream Status:")
                         .foregroundColor(.yellow)
                     Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
                         .foregroundColor(.white)
@@ -68,6 +74,10 @@ struct ContentView: View {
                     Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Lost")")
                         .foregroundColor(.white)
                         .font(.caption)
+                    Text("Screen Sleep: DISABLED (Keep Awake)")
+                        .foregroundColor(.green)
+                        .font(.caption2)
+                        .bold()
                 }
                 .padding()
                 .background(Color.white.opacity(0.1))
@@ -76,6 +86,9 @@ struct ContentView: View {
             .padding()
         }
         .onAppear {
+            // アプリ起動中もスリープ無効化を再保証
+            UIApplication.shared.isIdleTimerDisabled = true
+
             trackerManager.onTrackingDataUpdated = { headPos, headRot, left, right in
                 gestureProcessor.processHandState(leftHand: left, rightHand: right)
                 if isStreaming {
@@ -91,6 +104,7 @@ struct ContentView: View {
             trackerManager.stopTracking()
             isStreaming = false
         } else {
+            UIApplication.shared.isIdleTimerDisabled = true
             streamer.connect(targetIP: targetIP, port: 9050)
             trackerManager.startTracking()
             isStreaming = true
