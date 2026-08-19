@@ -28,9 +28,14 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "iphonevr");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "iPhoneVR Left Hand" : "iPhoneVR Right Hand");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, isLeft ? "iPhoneVR_LeftHand_001" : "iPhoneVR_RightHand_001");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "Apple/iPhoneVR");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, "generic_controller");
     vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{iphonevr}/resources/input/iphonevr_controller_profile.json");
 
     const char* skelPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
@@ -66,16 +71,17 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     
-    float baseOffsetX = isLeft ? -0.20f : 0.20f;
-    float baseOffsetY = -0.25f;
-    float baseOffsetZ = -0.45f;
+    float baseOffsetX = isLeft ? -0.22f : 0.22f;
+    float baseOffsetY = -0.20f;
+    float baseOffsetZ = -0.40f;
 
     float hX = handData.joints[VISION_JOINT_WRIST].position.x;
     float hY = handData.joints[VISION_JOINT_WRIST].position.y;
+    float hZ = handData.joints[VISION_JOINT_WRIST].position.z;
 
     m_pose.vecPosition[0] = headPos.x + baseOffsetX + hX;
     m_pose.vecPosition[1] = headPos.y + baseOffsetY + hY;
-    m_pose.vecPosition[2] = headPos.z + baseOffsetZ;
+    m_pose.vecPosition[2] = headPos.z + baseOffsetZ + hZ;
 
     m_pose.qRotation.w = 0.92388f;
     m_pose.qRotation.x = 0.38268f;
@@ -85,17 +91,17 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
-        bool isPinch = (handData.isPinching == 1);
-        float trigVal = isPinch ? 1.0f : 0.0f;
+        bool isPinching = (handData.isPinching == 1);
+        float trigVal = isPinching ? 1.0f : 0.0f;
 
         if (m_ulTriggerClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isPinch, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isPinching, 0);
         }
         if (m_ulTriggerValueComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateScalarComponent(m_ulTriggerValueComponent, trigVal, 0);
         }
         if (m_ulGripClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isPinch, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isPinching, 0);
         }
 
         vr::VRBoneTransform_t bones[31];
@@ -123,8 +129,6 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     for (int i = 0; i < 31; ++i) {
         makeIdentity(outBones[i]);
     }
-
-    if (!handData.isTracked) return;
 
     auto mapJoint = [](const BoneTransform& src, vr::VRBoneTransform_t& dst) {
         dst.position.v[0] = src.position.x;
