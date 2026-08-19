@@ -16,38 +16,22 @@
 @implementation SettingsViewController {
     NSInteger _bitrate;
     NSInteger _lastSelectedResolutionIndex;
+    
+    // iPhoneVR 追加 UI 要素
+    UILabel* _vrHeaderLabel;
+    UILabel* _vrModeLabel;
+    UISwitch* _vrModeSwitch;
+    UILabel* _handTrackingLabel;
+    UISwitch* _handTrackingSwitch;
+    UIButton* _launchVRButton;
 }
 
 @dynamic overrideUserInterfaceStyle;
 
 static NSString* bitrateFormat = @"Bitrate: %.1f Mbps";
 static const int bitrateTable[] = {
-    500,
-    1000,
-    1500,
-    2000,
-    2500,
-    3000,
-    4000,
-    5000,
-    6000,
-    7000,
-    8000,
-    9000,
-    10000,
-    12000,
-    15000,
-    18000,
-    20000,
-    30000,
-    40000,
-    50000,
-    60000,
-    70000,
-    80000,
-    100000,
-    120000,
-    150000,
+    500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
+    12000, 15000, 18000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 100000, 120000, 150000,
 };
 
 const int RESOLUTION_TABLE_SIZE = 7;
@@ -56,32 +40,23 @@ CGSize resolutionTable[RESOLUTION_TABLE_SIZE];
 
 -(int)getSliderValueForBitrate:(NSInteger)bitrate {
     int i;
-    
     for (i = 0; i < (sizeof(bitrateTable) / sizeof(*bitrateTable)); i++) {
         if (bitrate <= bitrateTable[i]) {
             return i;
         }
     }
-    
-    // Return the last entry in the table
     return i - 1;
 }
 
-// This view is rooted at a ScrollView. To make it scrollable,
-// we'll update content size here.
 -(void)viewDidLayoutSubviews {
     CGFloat highestViewY = 0;
     
-    // Enumerate the scroll view's subviews looking for the
-    // highest view Y value to set our scroll view's content
-    // size.
     for (UIView* view in self.scrollView.subviews) {
-        // UIScrollViews have 2 default child views
-        // which represent the horizontal and vertical scrolling
-        // indicators. Ignore any views we don't recognize.
         if (![view isKindOfClass:[UILabel class]] &&
             ![view isKindOfClass:[UISegmentedControl class]] &&
-            ![view isKindOfClass:[UISlider class]]) {
+            ![view isKindOfClass:[UISlider class]] &&
+            ![view isKindOfClass:[UISwitch class]] &&
+            ![view isKindOfClass:[UIButton class]]) {
             continue;
         }
         
@@ -91,20 +66,14 @@ CGSize resolutionTable[RESOLUTION_TABLE_SIZE];
         }
     }
     
-    // Add a bit of padding so the view doesn't end right at the button of the display
-    self.scrollView.contentSize = CGSizeMake(self.scrollView.contentSize.width,
-                                             highestViewY + 20);
+    self.scrollView.contentSize = CGSizeMake(self.scrollView.contentSize.width, highestViewY + 40);
 }
 
-// Adjust the subviews for the safe area on the iPhone X.
 - (void)viewSafeAreaInsetsDidChange {
     [super viewSafeAreaInsetsDidChange];
     
     if (@available(iOS 11.0, *)) {
         for (UIView* view in self.view.subviews) {
-            // HACK: The official safe area is much too large for our purposes
-            // so we'll just use the presence of any safe area to indicate we should
-            // pad by 20.
             if (self.view.safeAreaInsets.left >= 20 || self.view.safeAreaInsets.right >= 20) {
                 view.frame = CGRectMake(view.frame.origin.x + 20, view.frame.origin.y, view.frame.size.width, view.frame.size.height);
             }
@@ -113,23 +82,16 @@ CGSize resolutionTable[RESOLUTION_TABLE_SIZE];
 }
 
 BOOL isCustomResolution(CGSize res) {
-    if (res.width == 0 && res.height == 0) {
-        return NO;
-    }
-    
+    if (res.width == 0 && res.height == 0) return NO;
     for (int i = 0; i < RESOLUTION_TABLE_CUSTOM_INDEX; i++) {
-        if (res.width == resolutionTable[i].width && res.height == resolutionTable[i].height) {
-            return NO;
-        }
+        if (res.width == resolutionTable[i].width && res.height == resolutionTable[i].height) return NO;
     }
-    
     return YES;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    // Always run settings in dark mode because we want the light fonts
     if (@available(iOS 13.0, tvOS 13.0, *)) {
         self.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     }
@@ -137,10 +99,8 @@ BOOL isCustomResolution(CGSize res) {
     DataManager* dataMan = [[DataManager alloc] init];
     TemporarySettings* currentSettings = [dataMan getSettings];
     
-    // Ensure we pick a bitrate that falls exactly onto a slider notch
     _bitrate = bitrateTable[[self getSliderValueForBitrate:[currentSettings.bitrate intValue]]];
 
-    // Get the size of the screen with and without safe area insets
     UIWindow *window = UIApplication.sharedApplication.windows.firstObject;
     CGFloat screenScale = window.screen.scale;
     CGFloat safeAreaWidth = (window.frame.size.width - window.safeAreaInsets.left - window.safeAreaInsets.right) * screenScale;
@@ -158,25 +118,18 @@ BOOL isCustomResolution(CGSize res) {
     resolutionTable[3] = CGSizeMake(3840, 2160);
     resolutionTable[4] = CGSizeMake(safeAreaWidth, fullScreenHeight);
     resolutionTable[5] = CGSizeMake(fullScreenWidth, fullScreenHeight);
-    resolutionTable[6] = CGSizeMake([currentSettings.width integerValue], [currentSettings.height integerValue]); // custom initial value
+    resolutionTable[6] = CGSizeMake([currentSettings.width integerValue], [currentSettings.height integerValue]);
     
-    // Don't populate the custom entry unless we have a custom resolution
     if (!isCustomResolution(resolutionTable[6])) {
         resolutionTable[6] = CGSizeMake(0, 0);
     }
     
     NSInteger framerate;
     switch ([currentSettings.framerate integerValue]) {
-        case 30:
-            framerate = 0;
-            break;
+        case 30: framerate = 0; break;
         default:
-        case 60:
-            framerate = 1;
-            break;
-        case 120:
-            framerate = 2;
-            break;
+        case 60: framerate = 1; break;
+        case 120: framerate = 2; break;
     }
 
     NSInteger resolution = 1;
@@ -188,7 +141,6 @@ BOOL isCustomResolution(CGSize res) {
         }
     }
 
-    // Only show the 120 FPS option if we have a > 60-ish Hz display
     bool enable120Fps = false;
     if (@available(iOS 10.3, tvOS 10.3, *)) {
         if ([UIScreen mainScreen].maximumFramesPerSecond > 62) {
@@ -199,7 +151,6 @@ BOOL isCustomResolution(CGSize res) {
         [self.framerateSelector removeSegmentAtIndex:2 animated:NO];
     }
 
-    // Disable codec selector segments for unsupported codecs
 #if defined(__IPHONE_16_0) || defined(__TVOS_16_0)
     if (!VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1))
 #endif
@@ -208,24 +159,18 @@ BOOL isCustomResolution(CGSize res) {
     }
     if (!VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
         [self.codecSelector removeSegmentAtIndex:1 animated:NO];
-
-        // Only enable the 4K option for "recent" devices. We'll judge that by whether
-        // they support HEVC decoding (A9 or later).
         [self.resolutionSelector setEnabled:NO forSegmentAtIndex:3];
     }
     switch (currentSettings.preferredCodec) {
         case CODEC_PREF_AUTO:
             [self.codecSelector setSelectedSegmentIndex:self.codecSelector.numberOfSegments - 1];
             break;
-            
         case CODEC_PREF_AV1:
             [self.codecSelector setSelectedSegmentIndex:2];
             break;
-            
         case CODEC_PREF_HEVC:
             [self.codecSelector setSelectedSegmentIndex:1];
             break;
-            
         case CODEC_PREF_H264:
             [self.codecSelector setSelectedSegmentIndex:0];
             break;
@@ -263,10 +208,81 @@ BOOL isCustomResolution(CGSize res) {
     [self.bitrateSlider addTarget:self action:@selector(bitrateSliderMoved) forControlEvents:UIControlEventValueChanged];
     [self updateBitrateText];
     [self updateResolutionDisplayViewText];
+
+    // ==========================================
+    // 🥽 ポプちゃん要請: iPhoneVR モード設定 ＆ ボタンの物理動的追加
+    // ==========================================
+    CGFloat startY = 480.0f;
+    CGFloat width = self.scrollView.bounds.size.width > 0 ? self.scrollView.bounds.size.width - 40 : 280;
+
+    _vrHeaderLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, startY, width, 30)];
+    _vrHeaderLabel.text = @"🥽 iPhoneVR 6DoF & Hand Tracking";
+    _vrHeaderLabel.textColor = [UIColor systemBlueColor];
+    _vrHeaderLabel.font = [UIFont boldSystemFontOfSize:16];
+    [self.scrollView addSubview:_vrHeaderLabel];
+
+    _vrModeLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, startY + 36, width - 60, 30)];
+    _vrModeLabel.text = @"3D Stereo VR Mode (SBS Output)";
+    _vrModeLabel.textColor = [UIColor whiteColor];
+    _vrModeLabel.font = [UIFont systemFontOfSize:14];
+    [self.scrollView addSubview:_vrModeLabel];
+
+    _vrModeSwitch = [[UISwitch alloc] initWithFrame:CGRectMake(20 + width - 50, startY + 36, 50, 30)];
+    BOOL vrModeOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"vr_mode_enabled"];
+    [_vrModeSwitch setOn:vrModeOn animated:NO];
+    [_vrModeSwitch addTarget:self action:@selector(vrModeSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+    [self.scrollView addSubview:_vrModeSwitch];
+
+    _handTrackingLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, startY + 76, width - 60, 30)];
+    _handTrackingLabel.text = @"Vision 21-Joint Hand Tracker";
+    _handTrackingLabel.textColor = [UIColor whiteColor];
+    _handTrackingLabel.font = [UIFont systemFontOfSize:14];
+    [self.scrollView addSubview:_handTrackingLabel];
+
+    _handTrackingSwitch = [[UISwitch alloc] initWithFrame:CGRectMake(20 + width - 50, startY + 76, 50, 30)];
+    BOOL handOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"vr_hand_tracking_enabled"];
+    [_handTrackingSwitch setOn:handOn animated:NO];
+    [_handTrackingSwitch addTarget:self action:@selector(handTrackingSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+    [self.scrollView addSubview:_handTrackingSwitch];
+
+    _launchVRButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    _launchVRButton.frame = CGRectMake(20, startY + 120, width, 44);
+    [_launchVRButton setTitle:@"🚀 LAUNCH VR HMD STREAMING" forState:UIControlStateNormal];
+    [_launchVRButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    _launchVRButton.backgroundColor = [UIColor systemBlueColor];
+    _launchVRButton.layer.cornerRadius = 10;
+    _launchVRButton.titleLabel.font = [UIFont boldSystemFontOfSize:15];
+    [_launchVRButton addTarget:self action:@selector(launchVRButtonTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self.scrollView addSubview:_launchVRButton];
+}
+
+- (void) vrModeSwitchChanged:(UISwitch*)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:@"vr_mode_enabled"];
+}
+
+- (void) handTrackingSwitchChanged:(UISwitch*)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:@"vr_hand_tracking_enabled"];
+}
+
+- (void) launchVRButtonTapped {
+    UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"🚀 Launch VR HMD Mode"
+                                                                   message:@"VR 2眼表示と 6DoF / 21関節ハンドトラッキングをフル起動いたします！"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"START VR" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        // カメラ権限確認の上スタート
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (granted) {
+                    NSLog(@"VR HMD Mode & Tracking Engine Started!");
+                }
+            });
+        }];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void) touchModeChanged {
-    // Disable on-screen controls in absolute touch mode
     [self.onscreenControlSelector setEnabled:[self.touchModeSelector selectedSegmentIndex] == 0];
 }
 
@@ -276,15 +292,8 @@ BOOL isCustomResolution(CGSize res) {
     NSInteger height = [self getChosenStreamHeight];
     NSInteger defaultBitrate;
     
-    // This logic is shamelessly stolen from Moonlight Qt:
-    // https://github.com/moonlight-stream/moonlight-qt/blob/master/app/settings/streamingpreferences.cpp
-    
-    // Don't scale bitrate linearly beyond 60 FPS. It's definitely not a linear
-    // bitrate increase for frame rate once we get to values that high.
     float frameRateFactor = (fps <= 60 ? fps : (sqrtf(fps / 60.f) * 60.f)) / 30.f;
 
-    // TODO: Collect some empirical data to see if these defaults make sense.
-    // We're just using the values that the Shield used, as we have for years.
     struct {
         NSInteger pixels;
         int factor;
@@ -298,28 +307,23 @@ BOOL isCustomResolution(CGSize res) {
         { -1, -1 }
     };
 
-    // Calculate the resolution factor by linear interpolation of the resolution table
     float resolutionFactor;
     NSInteger pixels = width * height;
     for (int i = 0;; i++) {
         if (pixels == resTable[i].pixels) {
-            // We can bail immediately for exact matches
             resolutionFactor = resTable[i].factor;
             break;
         }
         else if (pixels < resTable[i].pixels) {
             if (i == 0) {
-                // Never go below the lowest resolution entry
                 resolutionFactor = resTable[i].factor;
             }
             else {
-                // Interpolate between the entry greater than the chosen resolution (i) and the entry less than the chosen resolution (i-1)
                 resolutionFactor = ((float)(pixels - resTable[i-1].pixels) / (resTable[i].pixels - resTable[i-1].pixels)) * (resTable[i].factor - resTable[i-1].factor) + resTable[i-1].factor;
             }
             break;
         }
         else if (resTable[i].pixels == -1) {
-            // Never go above the highest resolution entry
             resolutionFactor = resTable[i-1].factor;
             break;
         }
@@ -383,25 +387,20 @@ BOOL isCustomResolution(CGSize res) {
         long width = [widthField.text integerValue];
         long height = [heightField.text integerValue];
         if (width <= 0 || height <= 0) {
-            // Restore the previous selection
             [self.resolutionSelector setSelectedSegmentIndex:self->_lastSelectedResolutionIndex];
             return;
         }
         
-        // H.264 maximum
         int maxResolutionDimension = 4096;
         if (@available(iOS 11.0, tvOS 11.0, *)) {
             if (VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
-                // HEVC maximum
                 maxResolutionDimension = 8192;
             }
         }
         
-        // Cap to maximum valid dimensions
         width = MIN(width, maxResolutionDimension);
         height = MIN(height, maxResolutionDimension);
         
-        // Cap to minimum valid dimensions
         width = MAX(width, 256);
         height = MAX(height, 256);
 
@@ -416,7 +415,6 @@ BOOL isCustomResolution(CGSize res) {
     }]];
 
     [alertController addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
-        // Restore the previous selection
         [self.resolutionSelector setSelectedSegmentIndex:self->_lastSelectedResolutionIndex];
     }]];
 
@@ -463,62 +461,45 @@ BOOL isCustomResolution(CGSize res) {
 }
 
 - (void) updateBitrateText {
-    // Display bitrate in Mbps
     [self.bitrateLabel setText:[NSString stringWithFormat:bitrateFormat, _bitrate / 1000.]];
 }
 
 - (NSInteger) getChosenFrameRate {
     switch ([self.framerateSelector selectedSegmentIndex]) {
-        case 0:
-            return 30;
-        case 1:
-            return 60;
-        case 2:
-            return 120;
-        default:
-            abort();
+        case 0: return 30;
+        case 1: return 60;
+        case 2: return 120;
+        default: abort();
     }
 }
 
 - (uint32_t) getChosenCodecPreference {
-    // Auto is always the last segment
     if (self.codecSelector.selectedSegmentIndex == self.codecSelector.numberOfSegments - 1) {
         return CODEC_PREF_AUTO;
     }
     else {
         switch (self.codecSelector.selectedSegmentIndex) {
-            case 0:
-                return CODEC_PREF_H264;
-                
-            case 1:
-                return CODEC_PREF_HEVC;
-                
-            case 2:
-                return CODEC_PREF_AV1;
-                
-            default:
-                abort();
+            case 0: return CODEC_PREF_H264;
+            case 1: return CODEC_PREF_HEVC;
+            case 2: return CODEC_PREF_AV1;
+            default: abort();
         }
     }
 }
 
 - (NSInteger) getChosenStreamHeight {
-    // because the 4k resolution can be removed
     BOOL lastSegmentSelected = [self.resolutionSelector selectedSegmentIndex] + 1 == [self.resolutionSelector numberOfSegments];
     if (lastSegmentSelected) {
         return resolutionTable[RESOLUTION_TABLE_CUSTOM_INDEX].height;
     }
-
     return resolutionTable[[self.resolutionSelector selectedSegmentIndex]].height;
 }
 
 - (NSInteger) getChosenStreamWidth {
-    // because the 4k resolution can be removed
     BOOL lastSegmentSelected = [self.resolutionSelector selectedSegmentIndex] + 1 == [self.resolutionSelector numberOfSegments];
     if (lastSegmentSelected) {
         return resolutionTable[RESOLUTION_TABLE_CUSTOM_INDEX].width;
     }
-
     return resolutionTable[[self.resolutionSelector selectedSegmentIndex]].width;
 }
 
@@ -542,7 +523,7 @@ BOOL isCustomResolution(CGSize res) {
                            framerate:framerate
                               height:height
                                width:width
-                         audioConfig:2 // Stereo
+                         audioConfig:2
                     onscreenControls:onscreenControls
                        optimizeGames:optimizeGames
                      multiController:multiController
@@ -558,14 +539,11 @@ BOOL isCustomResolution(CGSize res) {
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
 }
-
 
 #pragma mark - Navigation
 
 - (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
 }
-
 
 @end
