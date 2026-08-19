@@ -26,7 +26,14 @@ if [ -n "$APP_PATH" ]; then
     cp -R "$APP_PATH" "$BUILD_DIR/MoonlightHMD.app"
     cd "$BUILD_DIR"
     zip -r MoonlightHMD-iOS.zip MoonlightHMD.app
-    echo "Successfully packaged MoonlightHMD.app"
+
+    # Create standard .ipa package for AltStore / Sideloadly / TrollStore
+    mkdir -p Payload
+    cp -R MoonlightHMD.app Payload/
+    zip -r MoonlightHMD.ipa Payload
+    rm -rf Payload
+
+    echo "Successfully packaged MoonlightHMD.app and MoonlightHMD.ipa"
 else
     echo "Error: MoonlightHMD.app build failed!"
     exit 1

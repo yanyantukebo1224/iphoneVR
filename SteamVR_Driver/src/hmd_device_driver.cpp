@@ -11,7 +11,7 @@ HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(vr::k_unTrackedDeviceIndexInva
     m_pose.qWorldFromDriverRotation.w = 1.0;
     m_pose.qDriverFromHeadRotation.w = 1.0;
 
-    // 地面埋まり防止：標準目線高さ 1.65m に設定 (ポプちゃん指示 視高調整)
+    // Default eye level height 1.65m
     m_config.offsetY = 1.65f;
 }
 

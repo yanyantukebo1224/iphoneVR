@@ -61,14 +61,19 @@ class BinaryUDPStreamer {
 
     private func appendHandData(hand: HandPacketData?, defaultChirality: UInt8, to data: inout Data) {
         var chirality = defaultChirality
-        var isTracked: UInt8 = (hand != nil) ? 1 : 0
+        var isTracked: UInt8 = (hand?.isTracked == 1) ? 1 : 0
         var isPinching: UInt8 = hand?.isPinching ?? 0
         var pinchDist: Float = hand?.pinchDistance ?? 1.0
+
+        var curls = hand?.curls ?? FingerCurls()
+        var splays = hand?.splays ?? FingerSplays()
 
         data.append(UnsafeBufferPointer(start: &chirality, count: 1))
         data.append(UnsafeBufferPointer(start: &isTracked, count: 1))
         data.append(UnsafeBufferPointer(start: &isPinching, count: 1))
         data.append(UnsafeBufferPointer(start: &pinchDist, count: 1))
+        data.append(UnsafeBufferPointer(start: &curls, count: 1))
+        data.append(UnsafeBufferPointer(start: &splays, count: 1))
 
         var dummyBone = BoneTransform(
             position: Vector3f(x: 0, y: 0, z: 0),
@@ -84,6 +89,9 @@ class BinaryUDPStreamer {
                 data.append(UnsafeBufferPointer(start: &dummyBone, count: 1))
             }
         }
+
+        var controller = hand?.controller ?? ControllerInputData()
+        data.append(UnsafeBufferPointer(start: &controller, count: 1))
     }
 
     func stop() {
@@ -91,3 +99,4 @@ class BinaryUDPStreamer {
         connection = nil
     }
 }
+

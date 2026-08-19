@@ -35,6 +35,15 @@ private:
     vr::VRInputComponentHandle_t m_ulTriggerClickComponent;
     vr::VRInputComponentHandle_t m_ulTriggerValueComponent;
     vr::VRInputComponentHandle_t m_ulGripClickComponent;
+    vr::VRInputComponentHandle_t m_ulGripValueComponent;
+    vr::VRInputComponentHandle_t m_ulAButtonComponent;
+    vr::VRInputComponentHandle_t m_ulBButtonComponent;
+    vr::VRInputComponentHandle_t m_ulXButtonComponent;
+    vr::VRInputComponentHandle_t m_ulYButtonComponent;
+    vr::VRInputComponentHandle_t m_ulThumbstickXComponent;
+    vr::VRInputComponentHandle_t m_ulThumbstickYComponent;
+    vr::VRInputComponentHandle_t m_ulThumbstickClickComponent;
+    vr::VRInputComponentHandle_t m_ulSystemButtonComponent;
 
     bool m_isTracked;
 

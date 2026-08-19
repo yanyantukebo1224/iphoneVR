@@ -31,6 +31,7 @@ jobs:
           path: |
             iOS/build/MoonlightHMD.app
             iOS/build/MoonlightHMD-iOS.zip
+            iOS/build/MoonlightHMD.ipa
 
   build-pc-driver:
     name: Build PC SteamVR Driver (Windows)

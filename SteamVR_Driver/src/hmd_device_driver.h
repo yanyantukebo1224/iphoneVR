@@ -32,7 +32,7 @@ public:
     virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
     virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
-    // IVRDisplayComponent (公式 openvr_driver.h 完全準拠)
+    // IVRDisplayComponent
     virtual void GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) override;
     virtual bool IsDisplayOnDesktop() override { return true; }
     virtual bool IsDisplayRealDisplay() override { return false; }

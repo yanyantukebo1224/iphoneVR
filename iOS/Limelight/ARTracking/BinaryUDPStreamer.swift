@@ -4,32 +4,27 @@ import simd
 
 class BinaryUDPStreamer {
     private var connection: NWConnection?
-    private let queue = DispatchQueue(label: "com.iphonevr.udp.streamer", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "com.iphonevr.udp.stream", qos: .userInteractive)
     private var sequenceNumber: UInt32 = 0
 
     func connect(targetIP: String, port: UInt16 = 9050) {
         let host = NWEndpoint.Host(targetIP)
-        let endpointPort = NWEndpoint.Port(rawValue: port) ?? 9050
-
-        let connection = NWConnection(host: host, port: endpointPort, using: .udp)
-        connection.start(queue: queue)
-        self.connection = connection
-        print("BinaryUDPStreamer: Connected to \(targetIP):\(port)")
-    }
-
-    func stop() {
-        connection?.cancel()
-        connection = nil
+        let nwPort = NWEndpoint.Port(rawValue: port) ?? 9050
+        
+        let params = NWParameters.udp
+        connection = NWConnection(host: host, port: nwPort, using: params)
+        connection?.start(queue: queue)
     }
 
     func sendPacket(headPos: SIMD3<Float>, headRot: simd_quatf, leftHand: HandPacketData?, rightHand: HandPacketData?) {
         guard let connection = connection else { return }
 
+        sequenceNumber += 1
         var data = Data()
 
+        // 1. ヘッダー
         var magic: UInt32 = 0x52565049 // "IPVR"
         var seq = sequenceNumber
-        sequenceNumber += 1
         var ts = Date().timeIntervalSince1970
 
         var hx = headPos.x
@@ -41,20 +36,22 @@ class BinaryUDPStreamer {
         var ry = headRot.imag.y
         var rz = headRot.imag.z
 
-        data.append(contentsOf: withUnsafeBytes(of: &magic) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &seq) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &ts) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &hx) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &hy) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &hz) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &rw) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &rx) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &ry) { Data($0) })
-        data.append(contentsOf: withUnsafeBytes(of: &rz) { Data($0) })
+        data.append(UnsafeBufferPointer(start: &magic, count: 1))
+        data.append(UnsafeBufferPointer(start: &seq, count: 1))
+        data.append(UnsafeBufferPointer(start: &ts, count: 1))
+        data.append(UnsafeBufferPointer(start: &hx, count: 1))
+        data.append(UnsafeBufferPointer(start: &hy, count: 1))
+        data.append(UnsafeBufferPointer(start: &hz, count: 1))
+        data.append(UnsafeBufferPointer(start: &rw, count: 1))
+        data.append(UnsafeBufferPointer(start: &rx, count: 1))
+        data.append(UnsafeBufferPointer(start: &ry, count: 1))
+        data.append(UnsafeBufferPointer(start: &rz, count: 1))
 
+        // 2. 左右の手データ (0: 左手, 1: 右手)
         appendHandData(hand: leftHand, defaultChirality: 0, to: &data)
         appendHandData(hand: rightHand, defaultChirality: 1, to: &data)
 
+        // 3. 高速UDP送信
         connection.send(content: data, completion: .contentProcessed({ error in
             if let error = error {
                 print("UDP Send Error: \(error)")
@@ -63,31 +60,43 @@ class BinaryUDPStreamer {
     }
 
     private func appendHandData(hand: HandPacketData?, defaultChirality: UInt8, to data: inout Data) {
-        if var h = hand {
-            data.append(contentsOf: withUnsafeBytes(of: &h.chirality) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &h.isTracked) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &h.isPinching) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &h.pinchDistance) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &h.joints) { Data($0) })
+        var chirality = defaultChirality
+        var isTracked: UInt8 = (hand?.isTracked == 1) ? 1 : 0
+        var isPinching: UInt8 = hand?.isPinching ?? 0
+        var pinchDist: Float = hand?.pinchDistance ?? 1.0
+
+        var curls = hand?.curls ?? FingerCurls()
+        var splays = hand?.splays ?? FingerSplays()
+
+        data.append(UnsafeBufferPointer(start: &chirality, count: 1))
+        data.append(UnsafeBufferPointer(start: &isTracked, count: 1))
+        data.append(UnsafeBufferPointer(start: &isPinching, count: 1))
+        data.append(UnsafeBufferPointer(start: &pinchDist, count: 1))
+        data.append(UnsafeBufferPointer(start: &curls, count: 1))
+        data.append(UnsafeBufferPointer(start: &splays, count: 1))
+
+        var dummyBone = BoneTransform(
+            position: Vector3f(x: 0, y: 0, z: 0),
+            orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
+        )
+
+        if let hand = hand {
+            withUnsafeBytes(of: hand.joints) { rawPtr in
+                data.append(rawPtr.bindMemory(to: UInt8.self))
+            }
         } else {
-            var chirality = defaultChirality
-            var isTracked: UInt8 = 0
-            var isPinching: UInt8 = 0
-            var pinchDist: Float = 1.0
-
-            data.append(contentsOf: withUnsafeBytes(of: &chirality) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &isTracked) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &isPinching) { Data($0) })
-            data.append(contentsOf: withUnsafeBytes(of: &pinchDist) { Data($0) })
-
-            var dummyBone = BoneTransform(
-                position: Vector3f(x: 0, y: 0, z: 0),
-                orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
-            )
-
             for _ in 0..<21 {
-                data.append(contentsOf: withUnsafeBytes(of: &dummyBone) { Data($0) })
+                data.append(UnsafeBufferPointer(start: &dummyBone, count: 1))
             }
         }
+
+        var controller = hand?.controller ?? ControllerInputData()
+        data.append(UnsafeBufferPointer(start: &controller, count: 1))
+    }
+
+    func stop() {
+        connection?.cancel()
+        connection = nil
     }
 }
+

@@ -37,12 +37,15 @@ struct MoonlightVRMainView: View {
                             Text("Head Position: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
                                 .font(.caption2)
                                 .foregroundColor(.white)
-                            Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked" : "Searching...")")
+                            Text("Gamepad / Joy-Con: \(GameControllerManager.shared.controllerStatusDescription)")
                                 .font(.caption2)
-                                .foregroundColor(.gray)
-                            Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Searching...")")
+                                .foregroundColor(GameControllerManager.shared.isConnected ? .green : .gray)
+                            Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked (Curl: \(String(format: "%.2f", trackerManager.leftHandData?.curls.index ?? 0)))" : "Searching...")")
                                 .font(.caption2)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.white)
+                            Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked (Curl: \(String(format: "%.2f", trackerManager.rightHandData?.curls.index ?? 0)))" : "Searching...")")
+                                .font(.caption2)
+                                .foregroundColor(.white)
                             Text("UDP Target: \(vrSettings.targetIP):\(vrSettings.udpPort)")
                                 .font(.caption2)
                                 .foregroundColor(.blue)
@@ -175,6 +178,49 @@ struct MoonlightVRMainView: View {
                                         .textFieldStyle(RoundedBorderTextFieldStyle())
                                         .keyboardType(.numberPad)
                                         .frame(width: 90)
+                                }
+
+                                Divider().background(Color.gray.opacity(0.3))
+
+                                // 🔐 PIN Pairing
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text("Sunshine / GFE PIN Pairing:")
+                                            .font(.subheadline)
+                                            .bold()
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Button(action: {
+                                            MoonlightPairingManager.shared.checkAndPair(hostIP: vrSettings.targetIP)
+                                        }) {
+                                            Text("Pair with PC")
+                                                .font(.caption)
+                                                .bold()
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 4)
+                                                .background(Color.cyan)
+                                                .foregroundColor(.black)
+                                                .cornerRadius(6)
+                                        }
+                                    }
+
+                                    if case .pairingRequired(let pin) = MoonlightPairingManager.shared.pairingState {
+                                        VStack(alignment: .center, spacing: 2) {
+                                            Text("ENTER THIS PIN ON YOUR PC (SUNSHINE):")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundColor(.yellow)
+                                            Text(pin)
+                                                .font(.system(size: 24, weight: .heavy, design: .monospaced))
+                                                .foregroundColor(.green)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .background(Color.black.opacity(0.5))
+                                        .cornerRadius(6)
+                                    } else if case .paired(let server) = MoonlightPairingManager.shared.pairingState {
+                                        Text("✅ Paired with: \(server)")
+                                            .font(.caption2)
+                                            .foregroundColor(.green)
+                                    }
                                 }
                             }
                             .padding()

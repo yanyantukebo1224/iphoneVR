@@ -77,30 +77,49 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     }
 
     private func processHandObservation(results: [VNHumanHandPoseObservation]?, frame: ARFrame) {
-        guard let observations = results, !observations.isEmpty else {
-            DispatchQueue.main.async {
-                self.leftHandData = nil
-                self.rightHandData = nil
-            }
-            onTrackingDataUpdated?(headPosition, headRotation, nil, nil)
-            return
-        }
-
         var newLeft: HandPacketData?
         var newRight: HandPacketData?
 
-        for observation in observations {
-            guard let recognizedPoints = try? observation.recognizedPoints(.all),
-                  let wrist = recognizedPoints[.wrist] else { continue }
+        if let observations = results, !observations.isEmpty {
+            for observation in observations {
+                guard let recognizedPoints = try? observation.recognizedPoints(.all),
+                      let wrist = recognizedPoints[.wrist] else { continue }
 
-            let determinedChirality: UInt8 = (wrist.location.x <= 0.5) ? 0 : 1
+                let determinedChirality: UInt8 = (wrist.location.x <= 0.5) ? 0 : 1
 
-            if let handData = extract21Joints(from: observation, chirality: determinedChirality, frame: frame) {
-                if determinedChirality == 0 {
-                    newLeft = handData
-                } else {
-                    newRight = handData
+                if let handData = extract21Joints(from: observation, chirality: determinedChirality, frame: frame) {
+                    if determinedChirality == 0 {
+                        newLeft = handData
+                    } else {
+                        newRight = handData
+                    }
                 }
+            }
+        }
+
+        // Switch / GameController 接続時の物理コントローラー入力をマージ
+        let gcMgr = GameControllerManager.shared
+        if gcMgr.isConnected {
+            if newLeft == nil {
+                var leftDummy = createDefaultHandData(chirality: 0)
+                leftDummy.controller = gcMgr.getInputData(for: 0)
+                if leftDummy.controller.isConnected == 1 {
+                    leftDummy.isTracked = 1
+                    newLeft = leftDummy
+                }
+            } else {
+                newLeft?.controller = gcMgr.getInputData(for: 0)
+            }
+
+            if newRight == nil {
+                var rightDummy = createDefaultHandData(chirality: 1)
+                rightDummy.controller = gcMgr.getInputData(for: 1)
+                if rightDummy.controller.isConnected == 1 {
+                    rightDummy.isTracked = 1
+                    newRight = rightDummy
+                }
+            } else {
+                newRight?.controller = gcMgr.getInputData(for: 1)
             }
         }
 
@@ -110,6 +129,26 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
 
         onTrackingDataUpdated?(headPosition, headRotation, newLeft, newRight)
+    }
+
+    private func createDefaultHandData(chirality: UInt8) -> HandPacketData {
+        let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
+        let tupleJoints = (
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone, dummyBone
+        )
+        return HandPacketData(
+            chirality: chirality,
+            isTracked: 0,
+            isPinching: 0,
+            pinchDistance: 1.0,
+            curls: FingerCurls(),
+            splays: FingerSplays(),
+            joints: tupleJoints,
+            controller: ControllerInputData()
+        )
     }
 
     private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8, frame: ARFrame) -> HandPacketData? {
@@ -122,6 +161,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let isLeft = (chirality == 0)
         var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
 
+        // ピンチ幾何検出
         if let thumbTip = recognizedPoints[.thumbTip], let indexTip = recognizedPoints[.indexTip] {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
@@ -146,12 +186,14 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
+        // HMD視野空間における線形正規化3Dマッピング
         let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.50)
         let rawWristY = Float(0.5 - wristPoint.location.y) * Float(0.50)
         let rawWristZ = Float(0.0)
 
+        // EMA デュアルフィルタ (smooth alpha = 0.28)
         var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
-        let alpha: Float = 0.20
+        let alpha: Float = 0.28
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -163,6 +205,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
+        // 手首（第0関節）
         bones[0] = BoneTransform(
             position: Vector3f(x: targetWrist.x, y: targetWrist.y, z: targetWrist.z),
             orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
@@ -189,6 +232,44 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             }
         }
 
+        // 🖐️ 各指の個別 Curl（曲がり度合 0.0〜1.0）精密計算
+        let computeFingerCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
+            guard let mcp = recognizedPoints[mcpKey], let tip = recognizedPoints[tipKey] else { return 0.0 }
+            let mcpDist = hypot(Float(mcp.location.x - wristPoint.location.x), Float(mcp.location.y - wristPoint.location.y))
+            let tipDist = hypot(Float(tip.location.x - wristPoint.location.x), Float(tip.location.y - wristPoint.location.y))
+            let maxSpan = mcpDist * 2.1
+            let currentSpan = tipDist
+            let curl = 1.0 - ((currentSpan - mcpDist) / (maxSpan - mcpDist))
+            return max(0.0, min(1.0, curl))
+        }
+
+        var curls = FingerCurls()
+        curls.thumb = computeFingerCurl(.thumbCMC, .thumbTip)
+        curls.index = computeFingerCurl(.indexMCP, .indexTip)
+        curls.middle = computeFingerCurl(.middleMCP, .middleTip)
+        curls.ring = computeFingerCurl(.ringMCP, .ringTip)
+        curls.pinky = computeFingerCurl(.littleMCP, .littleTip)
+
+        if isPinching == 1 {
+            curls.thumb = max(curls.thumb, 0.85)
+            curls.index = max(curls.index, 0.90)
+        }
+
+        // 🖐️ 各指の Splay（指の開き角度 -1.0〜1.0）精密計算
+        let computeFingerSplay = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName, refKey: VNHumanHandPoseObservation.JointName) -> Float in
+            guard let tip = recognizedPoints[tipKey], let ref = recognizedPoints[refKey] else { return 0.0 }
+            let dx = Float(tip.location.x - ref.location.x)
+            let splay = (isLeft ? -1.0 : 1.0) * (dx * 5.0)
+            return max(-1.0, min(1.0, splay))
+        }
+
+        var splays = FingerSplays()
+        splays.thumb = computeFingerSplay(.thumbCMC, .thumbTip, .wrist)
+        splays.index = computeFingerSplay(.indexMCP, .indexTip, .middleMCP)
+        splays.middle = 0.0
+        splays.ring = computeFingerSplay(.ringMCP, .ringTip, .middleMCP)
+        splays.pinky = computeFingerSplay(.littleMCP, .littleTip, .ringMCP)
+
         let tupleJoints = (
             bones[0], bones[1], bones[2], bones[3], bones[4],
             bones[5], bones[6], bones[7], bones[8], bones[9],
@@ -196,12 +277,19 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             bones[15], bones[16], bones[17], bones[18], bones[19], bones[20]
         )
 
+        let controllerInput = GameControllerManager.shared.getInputData(for: chirality)
+
         return HandPacketData(
             chirality: chirality,
             isTracked: 1,
             isPinching: isPinching,
             pinchDistance: pinchDist,
-            joints: tupleJoints
+            curls: curls,
+            splays: splays,
+            joints: tupleJoints,
+            controller: controllerInput
         )
     }
 }
+
+

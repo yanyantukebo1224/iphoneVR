@@ -50,12 +50,56 @@ enum VisionJointIndex {
     VISION_JOINT_COUNT = 21
 };
 
+enum ControllerButtonBits : uint32_t {
+    BTN_A_OR_X           = (1 << 0), // A (Right) or X (Left)
+    BTN_B_OR_Y           = (1 << 1), // B (Right) or Y (Left)
+    BTN_X_OR_PLUS        = (1 << 2), // X (Right) or Plus
+    BTN_Y_OR_MINUS       = (1 << 3), // Y (Right) or Minus
+    BTN_TRIGGER_CLICK    = (1 << 4), // ZR or ZL click
+    BTN_GRIP_CLICK       = (1 << 5), // R or L bumper
+    BTN_THUMBSTICK_CLICK = (1 << 6), // Stick press
+    BTN_SYSTEM           = (1 << 7), // Home / Capture / System menu
+    BTN_DPAD_UP          = (1 << 8),
+    BTN_DPAD_DOWN        = (1 << 9),
+    BTN_DPAD_LEFT        = (1 << 10),
+    BTN_DPAD_RIGHT       = (1 << 11),
+};
+
+struct ControllerInputData {
+    uint8_t isConnected;       // 1 if physical Switch/MFi gamepad is connected
+    uint32_t buttonMask;       // ControllerButtonBits
+    float stickX;              // -1.0 to 1.0
+    float stickY;              // -1.0 to 1.0
+    float triggerValue;        // 0.0 to 1.0 (ZL/ZR)
+    float gripValue;           // 0.0 to 1.0 (L/R)
+    Quaternionf controllerRot; // Controller IMU rotation if available
+};
+
+struct FingerCurls {
+    float thumb;  // 0.0 (open) to 1.0 (fully curled)
+    float index;
+    float middle;
+    float ring;
+    float pinky;
+};
+
+struct FingerSplays {
+    float thumb;  // -1.0 (abducted) to 1.0 (adducted)
+    float index;  // Splay angle relative to palm
+    float middle;
+    float ring;
+    float pinky;
+};
+
 struct HandPacketData {
-    uint8_t chirality;
+    uint8_t chirality; // 0 = Left, 1 = Right
     uint8_t isTracked;
     uint8_t isPinching;
     float pinchDistance;
+    FingerCurls curls;
+    FingerSplays splays;
     BoneTransform joints[VISION_JOINT_COUNT];
+    ControllerInputData controller;
 };
 
 struct TrackingPacket {
@@ -64,7 +108,7 @@ struct TrackingPacket {
     double timestamp;
     Vector3f headPosition;
     Quaternionf headRotation;
-    HandPacketData hands[2];
+    HandPacketData hands[2]; // 0: Left, 1: Right
 };
 
 #pragma pack(pop)
