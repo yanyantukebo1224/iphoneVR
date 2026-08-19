@@ -14,6 +14,8 @@
 		A10000052C12345600000005 /* DistortionShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = B10000052C12345600000005 /* DistortionShader.metal */; };
 		A10000062C12345600000006 /* MoonlightHMDApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000062C12345600000006 /* MoonlightHMDApp.swift */; };
 		A10000072C12345600000007 /* TrackingProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000072C12345600000007 /* TrackingProtocol.swift */; };
+		A10000082C12345600000008 /* GameControllerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000082C12345600000008 /* GameControllerManager.swift */; };
+		A10000092C12345600000009 /* MoonlightPairingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000092C12345600000009 /* MoonlightPairingManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +27,8 @@
 		B10000052C12345600000005 /* DistortionShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; name = DistortionShader.metal; path = MoonlightHMD/VRRender/DistortionShader.metal; sourceTree = "<group>"; };
 		B10000062C12345600000006 /* MoonlightHMDApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MoonlightHMDApp.swift; path = MoonlightHMD/App/MoonlightHMDApp.swift; sourceTree = "<group>"; };
 		B10000072C12345600000007 /* TrackingProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrackingProtocol.swift; path = MoonlightHMD/Network/TrackingProtocol.swift; sourceTree = "<group>"; };
+		B10000082C12345600000008 /* GameControllerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GameControllerManager.swift; path = MoonlightHMD/Input/GameControllerManager.swift; sourceTree = "<group>"; };
+		B10000092C12345600000009 /* MoonlightPairingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MoonlightPairingManager.swift; path = MoonlightHMD/Network/MoonlightPairingManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -35,6 +39,8 @@
 				B10000022C12345600000002 /* HandGestureProcessor.swift */,
 				B10000032C12345600000003 /* BinaryUDPStreamer.swift */,
 				B10000072C12345600000007 /* TrackingProtocol.swift */,
+				B10000092C12345600000009 /* MoonlightPairingManager.swift */,
+				B10000082C12345600000008 /* GameControllerManager.swift */,
 				B10000042C12345600000004 /* MoonlightVRViewController.swift */,
 				B10000052C12345600000005 /* DistortionShader.metal */,
 				B10000062C12345600000006 /* MoonlightHMDApp.swift */,
@@ -97,6 +103,8 @@
 				A10000022C12345600000002 /* HandGestureProcessor.swift in Sources */,
 				A10000032C12345600000003 /* BinaryUDPStreamer.swift in Sources */,
 				A10000072C12345600000007 /* TrackingProtocol.swift in Sources */,
+				A10000092C12345600000009 /* MoonlightPairingManager.swift in Sources */,
+				A10000082C12345600000008 /* GameControllerManager.swift in Sources */,
 				A10000042C12345600000004 /* MoonlightVRViewController.swift in Sources */,
 				A10000052C12345600000005 /* DistortionShader.metal in Sources */,
 				A10000062C12345600000006 /* MoonlightHMDApp.swift in Sources */,
