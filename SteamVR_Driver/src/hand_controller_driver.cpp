@@ -27,8 +27,9 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     m_ulPropertyContainer = vr::VRProperties()->TrackedDeviceToPropertyContainer(m_unObjectId);
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
+    
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "iPhoneVR Left Hand" : "iPhoneVR Right Hand");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, isLeft ? "vr_controller_05_left" : "vr_controller_05_right");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, "generic_controller");
     vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{iphonevr}/resources/input/iphonevr_controller_profile.json");
 
@@ -53,57 +54,48 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{0.0f, 0.0f, 0.0f};
     dummyHand.joints[VISION_JOINT_WRIST].orientation = Quaternionf{1.0f, 0.0f, 0.0f, 0.0f};
 
-    UpdateHandPose(dummyHand, Vector3f{0.0f, 0.0f, 0.0f});
+    UpdateHandPose(dummyHand, Vector3f{0.0f, 1.65f, 0.0f});
 
     return vr::VRInitError_None;
 }
 
 void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos) {
-    if (!handData.isTracked) {
-        m_pose.poseIsValid = false;
-        m_pose.result = vr::TrackingResult_Running_OutOfRange;
-        if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
-            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
-        }
-        return;
-    }
-
     m_pose.poseIsValid = true;
+    m_pose.deviceIsConnected = true;
     m_pose.result = vr::TrackingResult_Running_OK;
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     
-    float baseOffsetX = isLeft ? -0.18f : 0.18f;
-    float baseOffsetY = -0.15f;
-    float baseOffsetZ = -0.35f;
+    float baseOffsetX = isLeft ? -0.20f : 0.20f;
+    float baseOffsetY = -0.25f;
+    float baseOffsetZ = -0.45f;
 
     float hX = handData.joints[VISION_JOINT_WRIST].position.x;
     float hY = handData.joints[VISION_JOINT_WRIST].position.y;
-    float hZ = handData.joints[VISION_JOINT_WRIST].position.z;
 
     m_pose.vecPosition[0] = headPos.x + baseOffsetX + hX;
     m_pose.vecPosition[1] = headPos.y + baseOffsetY + hY;
-    m_pose.vecPosition[2] = headPos.z + baseOffsetZ + hZ;
+    m_pose.vecPosition[2] = headPos.z + baseOffsetZ;
 
-    m_pose.qRotation.w = handData.joints[VISION_JOINT_WRIST].orientation.w;
-    m_pose.qRotation.x = handData.joints[VISION_JOINT_WRIST].orientation.x;
-    m_pose.qRotation.y = handData.joints[VISION_JOINT_WRIST].orientation.y;
-    m_pose.qRotation.z = handData.joints[VISION_JOINT_WRIST].orientation.z;
+    m_pose.qRotation.w = 0.92388f;
+    m_pose.qRotation.x = 0.38268f;
+    m_pose.qRotation.y = 0.0f;
+    m_pose.qRotation.z = 0.0f;
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
-        bool isPinching = (handData.isPinching == 1);
-        float trigVal = isPinching ? 1.0f : 0.0f;
+        bool isPinch = (handData.isPinching == 1);
+        float trigVal = isPinch ? 1.0f : 0.0f;
 
         if (m_ulTriggerClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isPinching, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isPinch, 0);
         }
         if (m_ulTriggerValueComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateScalarComponent(m_ulTriggerValueComponent, trigVal, 0);
         }
         if (m_ulGripClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isPinching, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isPinch, 0);
         }
 
         vr::VRBoneTransform_t bones[31];
