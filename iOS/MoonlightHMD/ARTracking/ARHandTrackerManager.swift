@@ -134,12 +134,12 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             .littleMCP, .littlePIP, .littleDIP, .littleTip
         ]
 
-        // 画面中心 (0.5, 0.5) を原点とした本格ダイナミック実質3D移動スケーリング (ポプちゃん指示 手の動きを広大連動)
+        // 画面中心 (0.5, 0.5) を原点とした本格ダイナミック実質3D移動スケーリング
         for (idx, key) in jointKeys.enumerated() {
             if let point = recognizedPoints[key], point.confidence > 0.10 {
-                let posX = Float(point.location.x - 0.5) * 1.8f // 画面左右運動
-                let posY = Float(0.5 - point.location.y) * 1.8f // 画面上下運動
-                let posZ = 0.0f
+                let posX = Float(point.location.x - 0.5) * Float(1.8) // 画面左右運動
+                let posY = Float(0.5 - point.location.y) * Float(1.8) // 画面上下運動
+                let posZ = Float(0.0)
 
                 bones[idx] = BoneTransform(
                     position: Vector3f(x: posX, y: posY, z: posZ),
