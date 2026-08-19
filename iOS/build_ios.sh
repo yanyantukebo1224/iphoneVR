@@ -8,7 +8,7 @@ BUILD_DIR="$PROJECT_DIR/build"
 
 mkdir -p "$BUILD_DIR"
 
-# Xcode build command for MoonlightHMD.xcodeproj
+# Xcode build command
 xcodebuild -project "$PROJECT_DIR/MoonlightHMD.xcodeproj" \
   -scheme MoonlightHMD \
   -sdk iphoneos \
@@ -18,7 +18,7 @@ xcodebuild -project "$PROJECT_DIR/MoonlightHMD.xcodeproj" \
   CODE_SIGNING_REQUIRED=NO \
   clean build
 
-# .app 成果物のコピーとZIP圧縮
+# .app 成果物のコピーとZIP圧縮 (Artifact用)
 APP_PATH=$(find "$BUILD_DIR/DerivedData" -name "MoonlightHMD.app" | head -n 1)
 
 if [ -n "$APP_PATH" ]; then
