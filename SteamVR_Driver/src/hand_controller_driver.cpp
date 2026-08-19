@@ -68,21 +68,26 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.poseIsValid = true;
     m_pose.deviceIsConnected = true;
     m_pose.result = vr::TrackingResult_Running_OK;
+    m_pose.qWorldFromDriverRotation.w = 1.0;
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     
+    // 床埋まりを物理的に完全回避：最低高さを 1.40m に完全設定 (ポプちゃん指示 床埋まり防止)
+    float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
+
     float baseOffsetX = isLeft ? -0.22f : 0.22f;
-    float baseOffsetY = -0.20f;
-    float baseOffsetZ = -0.40f;
+    float baseOffsetY = -0.25f; // 目線下25cm (胸元)
+    float baseOffsetZ = -0.40f; // 前方40cm
 
     float hX = handData.joints[VISION_JOINT_WRIST].position.x;
     float hY = handData.joints[VISION_JOINT_WRIST].position.y;
     float hZ = handData.joints[VISION_JOINT_WRIST].position.z;
 
     m_pose.vecPosition[0] = headPos.x + baseOffsetX + hX;
-    m_pose.vecPosition[1] = headPos.y + baseOffsetY + hY;
+    m_pose.vecPosition[1] = effectiveHeadY + baseOffsetY + hY;
     m_pose.vecPosition[2] = headPos.z + baseOffsetZ + hZ;
 
+    // 前方にポインターが向く回転角度
     m_pose.qRotation.w = 0.92388f;
     m_pose.qRotation.x = 0.38268f;
     m_pose.qRotation.y = 0.0f;
@@ -91,6 +96,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
+        // 確実なピンチ操作入力の更新
         bool isPinching = (handData.isPinching == 1);
         float trigVal = isPinching ? 1.0f : 0.0f;
 
