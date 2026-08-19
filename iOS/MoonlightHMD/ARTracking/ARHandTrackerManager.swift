@@ -16,6 +16,10 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     private var isLeftPinchingState: Bool = false
     private var isRightPinchingState: Bool = false
 
+    // EMAイージングフィルタ用前回の位置
+    private var prevLeftWristPos: SIMD3<Float> = .zero
+    private var prevRightWristPos: SIMD3<Float> = .zero
+
     var onTrackingDataUpdated: ((SIMD3<Float>, simd_quatf, HandPacketData?, HandPacketData?) -> Void)?
 
     override init() {
@@ -73,7 +77,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             guard let recognizedPoints = try? observation.recognizedPoints(.all),
                   let wrist = recognizedPoints[.wrist] else { continue }
 
-            // 画面中心より左 (point.location.x < 0.5) ➔ 100% 左手, 右 ➔ 100% 右手
+            // 画面上での位置 (x < 0.5 ➔ 左手, x >= 0.5 ➔ 右手) で確実識別
             let determinedChirality: UInt8 = (wrist.location.x < 0.5) ? 0 : 1
 
             if let handData = extract21Joints(from: observation, chirality: determinedChirality) {
@@ -94,7 +98,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     }
 
     private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8) -> HandPacketData? {
-        guard let recognizedPoints = try? observation.recognizedPoints(.all) else { return nil }
+        guard let recognizedPoints = try? observation.recognizedPoints(.all),
+              let wristPoint = recognizedPoints[.wrist] else { return nil }
 
         var isPinching: UInt8 = 0
         var pinchDist: Float = 1.0
@@ -102,13 +107,12 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let isLeft = (chirality == 0)
         var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
 
-        // 超高精度ピンチ＆多点ベクトル判定 (親指先・人差し指先・関節幾何)
+        // 精密ピンチ判定
         if let thumbTip = recognizedPoints[.thumbTip], let indexTip = recognizedPoints[.indexTip] {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
             pinchDist = sqrt(dx*dx + dy*dy)
 
-            // 高精度ヒステリシス判定 (4.5cmでピンチオン, 7.5cmでピンチオフ)
             if currentPinchState {
                 if pinchDist > 0.075 {
                     currentPinchState = false
@@ -128,11 +132,32 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
+        // 手首の画面中央差分から自然な移動量を計算 (飛び防止完全相対座標)
+        let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.35)
+        let rawWristY = Float(0.5 - wristPoint.location.y) * Float(0.35)
+        let rawWristZ = Float(0.0)
+
+        // EMA イージング補間 (Easing Filter: 0.3)
+        var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
+        let alpha: Float = 0.35
+        if isLeft {
+            targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
+            prevLeftWristPos = targetWrist
+        } else {
+            targetWrist = prevRightWristPos * (1.0 - alpha) + targetWrist * alpha
+            prevRightWristPos = targetWrist
+        }
+
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
-        let jointKeys: [VNHumanHandPoseObservation.JointName] = [
-            .wrist,
+        // 手首を第0関節にセット
+        bones[0] = BoneTransform(
+            position: Vector3f(x: targetWrist.x, y: targetWrist.y, z: targetWrist.z),
+            orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
+        )
+
+        let fingerJointKeys: [VNHumanHandPoseObservation.JointName] = [
             .thumbCMC, .thumbMP, .thumbIP, .thumbTip,
             .indexMCP, .indexPIP, .indexDIP, .indexTip,
             .middleMCP, .middlePIP, .middleDIP, .middleTip,
@@ -140,18 +165,15 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             .littleMCP, .littlePIP, .littleDIP, .littleTip
         ]
 
-        // 手の基準中心位置計算 (各手の画面上の相対位置から計算)
-        let centerBaseX: Float = isLeft ? 0.28 : 0.72
+        // 指関節は手首からの相対位置としてセット
+        for (idx, key) in fingerJointKeys.enumerated() {
+            if let point = recognizedPoints[key] {
+                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.2)
+                let relY = Float(wristPoint.location.y - point.location.y) * Float(0.2)
+                let relZ = Float(0.0)
 
-        for (idx, key) in jointKeys.enumerated() {
-            if let point = recognizedPoints[key], point.confidence > 0.10 {
-                // 画面中心差分から最適な VR 可動域 (左右 ±0.35m, 上下 ±0.30m) へリニアスケーリング
-                let posX = Float(point.location.x - CGFloat(centerBaseX)) * Float(0.9)
-                let posY = Float(0.5 - point.location.y) * Float(0.8)
-                let posZ = Float(0.0)
-
-                bones[idx] = BoneTransform(
-                    position: Vector3f(x: posX, y: posY, z: posZ),
+                bones[idx + 1] = BoneTransform(
+                    position: Vector3f(x: relX, y: relY, z: relZ),
                     orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
                 )
             }

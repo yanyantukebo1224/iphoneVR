@@ -48,7 +48,7 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
         m_ulPropertyContainer,
         skelComponentPath,
         skelComponentPath,
-        "/skeleton/hand/left",
+        isLeft ? "/skeleton/hand/left" : "/skeleton/hand/right",
         vr::VRSkeletalTracking_Full,
         nullptr,
         0,
@@ -62,7 +62,6 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     HandPacketData dummyHand{};
     dummyHand.isTracked = 1;
     dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{0.0f, 0.0f, 0.0f};
-    dummyHand.joints[VISION_JOINT_WRIST].orientation = Quaternionf{1.0f, 0.0f, 0.0f, 0.0f};
 
     UpdateHandPose(dummyHand, Vector3f{0.0f, 1.65f, 0.0f});
 
@@ -78,10 +77,9 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
 
-    // 自然なデフォルト手元位置 (胸元中央 offset)
-    float defaultOffsetX = isLeft ? -0.18f : 0.18f;
-    float defaultOffsetY = -0.22f; // 胸元高さ
-    float defaultOffsetZ = -0.35f; // 前方35cm
+    float defaultOffsetX = isLeft ? -0.20f : 0.20f;
+    float defaultOffsetY = -0.22f;
+    float defaultOffsetZ = -0.35f;
 
     float rawX = handData.joints[VISION_JOINT_WRIST].position.x;
     float rawY = handData.joints[VISION_JOINT_WRIST].position.y;
@@ -91,6 +89,11 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (rawY != rawY) rawY = 0.0f;
     if (rawZ != rawZ) rawZ = 0.0f;
 
+    // 異常値飛びガード
+    if (std::abs(rawX) > 0.60f) rawX = (rawX > 0) ? 0.60f : -0.60f;
+    if (std::abs(rawY) > 0.60f) rawY = (rawY > 0) ? 0.60f : -0.60f;
+    if (std::abs(rawZ) > 0.60f) rawZ = (rawZ > 0) ? 0.60f : -0.60f;
+
     auto now = std::chrono::steady_clock::now();
     float deltaMovement = std::sqrt(
         (rawX - m_lastPosition[0]) * (rawX - m_lastPosition[0]) +
@@ -98,8 +101,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         (rawZ - m_lastPosition[2]) * (rawZ - m_lastPosition[2])
     );
 
-    // 手が動いているか更新判定 (0.005m = 5mm 以上の動き)
-    if (deltaMovement > 0.005f && handData.isTracked == 1) {
+    if (handData.isTracked == 1 && deltaMovement > 0.002f) {
         m_lastMovementTime = now;
         m_lastPosition[0] = rawX;
         m_lastPosition[1] = rawY;
@@ -112,24 +114,22 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     float targetOffsetY = defaultOffsetY;
     float targetOffsetZ = defaultOffsetZ;
 
-    // 3秒以上動かない or トラッキングロスト時はヘッドセット中央（胸元）へ自動戻し！ (ポプちゃん指示)
     if (elapsedSeconds < 3 && handData.isTracked == 1) {
         targetOffsetX = defaultOffsetX + rawX;
         targetOffsetY = defaultOffsetY + rawY;
         targetOffsetZ = defaultOffsetZ + rawZ;
     }
 
-    // カクツキ防止のスムージング補間 (Smooth Interpolation)
-    float alpha = 0.35f;
-    m_smoothedPosition[0] = m_smoothedPosition[0] * (1.0f - alpha) + targetOffsetX * alpha;
-    m_smoothedPosition[1] = m_smoothedPosition[1] * (1.0f - alpha) + targetOffsetY * alpha;
-    m_smoothedPosition[2] = m_smoothedPosition[2] * (1.0f - alpha) + targetOffsetZ * alpha;
+    // Cubic Ease-Out イージング補間
+    float easingFactor = 0.25f;
+    m_smoothedPosition[0] += (targetOffsetX - m_smoothedPosition[0]) * easingFactor;
+    m_smoothedPosition[1] += (targetOffsetY - m_smoothedPosition[1]) * easingFactor;
+    m_smoothedPosition[2] += (targetOffsetZ - m_smoothedPosition[2]) * easingFactor;
 
     m_pose.vecPosition[0] = headPos.x + m_smoothedPosition[0];
     m_pose.vecPosition[1] = effectiveHeadY + m_smoothedPosition[1];
     m_pose.vecPosition[2] = headPos.z + m_smoothedPosition[2];
 
-    // 前方にビームが自然に伸びる回転角度
     m_pose.qRotation.w = 0.92388f;
     m_pose.qRotation.x = 0.38268f;
     m_pose.qRotation.y = 0.0f;
@@ -163,52 +163,45 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     const HandPacketData& handData,
     vr::VRBoneTransform_t outBones[31]
 ) {
-    auto makeIdentity = [](vr::VRBoneTransform_t& b, float bx=0, float by=0, float bz=0) {
-        b.position.v[0] = bx;
-        b.position.v[1] = by;
-        b.position.v[2] = bz;
-        b.orientation.w = 1.0;
-        b.orientation.x = 0.0;
-        b.orientation.y = 0.0;
-        b.orientation.z = 0.0;
+    auto makeBone = [](vr::VRBoneTransform_t& b, float px, float py, float pz, float qw=1.0f, float qx=0.0f, float qy=0.0f, float qz=0.0f) {
+        b.position.v[0] = px;
+        b.position.v[1] = py;
+        b.position.v[2] = pz;
+        b.orientation.w = qw;
+        b.orientation.x = qx;
+        b.orientation.y = qy;
+        b.orientation.z = qz;
     };
 
     for (int i = 0; i < 31; ++i) {
-        makeIdentity(outBones[i]);
+        makeBone(outBones[i], 0, 0, 0);
     }
 
-    auto mapJoint = [](const BoneTransform& src, vr::VRBoneTransform_t& dst) {
-        dst.position.v[0] = src.position.x;
-        dst.position.v[1] = src.position.y;
-        dst.position.v[2] = src.position.z;
-        dst.orientation.w = src.orientation.w;
-        dst.orientation.x = src.orientation.x;
-        dst.orientation.y = src.orientation.y;
-        dst.orientation.z = src.orientation.z;
+    makeBone(outBones[0], 0, 0, 0);
+    makeBone(outBones[1], 0, 0, 0);
+
+    bool isPinch = (handData.isPinching == 1);
+    float curlAngle = isPinch ? 1.1f : 0.15f;
+
+    float qw = std::cos(curlAngle / 2.0f);
+    float qx = std::sin(curlAngle / 2.0f);
+
+    struct FingerMapping {
+        int rootIndex;
+        float defaultX, defaultY, defaultZ;
+    } fingers[] = {
+        { 2,   0.03f, -0.01f,  0.03f },
+        { 7,   0.02f,  0.0f,   0.06f },
+        { 12,  0.00f,  0.0f,   0.07f },
+        { 17, -0.02f,  0.0f,   0.06f },
+        { 22, -0.04f, -0.01f,  0.05f }
     };
 
-    mapJoint(handData.joints[VISION_JOINT_WRIST], outBones[1]);
-
-    struct FingerMap {
-        int steamvr_start;
-        int vision_start;
-    } fingerMaps[] = {
-        { 2,  VISION_JOINT_THUMB_CMC },
-        { 7,  VISION_JOINT_INDEX_MCP },
-        { 12, VISION_JOINT_MIDDLE_MCP },
-        { 17, VISION_JOINT_RING_MCP },
-        { 22, VISION_JOINT_PINKY_MCP }
-    };
-
-    makeIdentity(outBones[6],  0.03f, 0.0f, 0.05f);
-    makeIdentity(outBones[11], 0.01f, 0.0f, 0.06f);
-    makeIdentity(outBones[16], -0.01f, 0.0f, 0.05f);
-    makeIdentity(outBones[21], -0.03f, 0.0f, 0.04f);
-
-    for (const auto& f : fingerMaps) {
-        for (int step = 0; step < 4; ++step) {
-            mapJoint(handData.joints[f.vision_start + step], outBones[f.steamvr_start + step]);
-        }
+    for (const auto& f : fingers) {
+        makeBone(outBones[f.rootIndex], f.defaultX, f.defaultY, f.defaultZ, qw, qx, 0, 0);
+        makeBone(outBones[f.rootIndex + 1], 0.0f, 0.0f, 0.03f, qw, qx, 0, 0);
+        makeBone(outBones[f.rootIndex + 2], 0.0f, 0.0f, 0.025f, qw, qx, 0, 0);
+        makeBone(outBones[f.rootIndex + 3], 0.0f, 0.0f, 0.02f, 1.0f, 0, 0, 0);
     }
 
     outBones[26] = outBones[5];
