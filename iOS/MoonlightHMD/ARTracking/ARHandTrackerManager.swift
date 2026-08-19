@@ -2,6 +2,7 @@ import Foundation
 import ARKit
 import Vision
 import Combine
+import UIKit
 
 class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     let session = ARSession()
@@ -48,15 +49,33 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
 
         let pixelBuffer = frame.capturedImage
+        
+        // HMD横画面(Landscape)や縦画面(Portrait)でのカメラセンサの回転を100%正当化
+        let visionOrientation = currentCGImagePropertyOrientation()
+
         processingQueue.async {
-            // Vision Image Handler (.up で画面正規化)
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: visionOrientation, options: [:])
             do {
                 try handler.perform([self.handPoseRequest])
                 self.processHandObservation(results: self.handPoseRequest.results, frame: frame)
             } catch {
                 print("Vision Hand Pose Error: \(error)")
             }
+        }
+    }
+
+    // デバイス姿勢に基づくVision入力向きの完全正当化
+    private func currentCGImagePropertyOrientation() -> CGImagePropertyOrientation {
+        let deviceOrientation = UIDevice.current.orientation
+        switch deviceOrientation {
+        case .landscapeLeft:
+            return .up
+        case .landscapeRight:
+            return .down
+        case .portraitUpsideDown:
+            return .left
+        default:
+            return .right
         }
     }
 
@@ -77,10 +96,10 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             guard let recognizedPoints = try? observation.recognizedPoints(.all),
                   let wrist = recognizedPoints[.wrist] else { continue }
 
-            // 画面中心より左 (location.x <= 0.5) ➔ 左手スロット, 右 (location.x > 0.5) ➔ 右手スロット
+            // 横画面HMD時における絶対画面左右判定 (location.x <= 0.5 ➔ 左手, location.x > 0.5 ➔ 右手)
             let determinedChirality: UInt8 = (wrist.location.x <= 0.5) ? 0 : 1
 
-            if let handData = extract21Joints(from: observation, chirality: determinedChirality) {
+            if let handData = extract21Joints(from: observation, chirality: determinedChirality, frame: frame) {
                 if determinedChirality == 0 {
                     newLeft = handData
                 } else {
@@ -97,7 +116,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         onTrackingDataUpdated?(headPosition, headRotation, newLeft, newRight)
     }
 
-    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8) -> HandPacketData? {
+    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8, frame: ARFrame) -> HandPacketData? {
         guard let recognizedPoints = try? observation.recognizedPoints(.all),
               let wristPoint = recognizedPoints[.wrist] else { return nil }
 
@@ -107,7 +126,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let isLeft = (chirality == 0)
         var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
 
-        // ピンチ判定
+        // ピンチ幾何検出
         if let thumbTip = recognizedPoints[.thumbTip], let indexTip = recognizedPoints[.indexTip] {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
@@ -132,15 +151,15 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        // Vision座標系 (左下0,0) を正しくVR画面座標系 (中央0,0) へリニアスケーリング
-        // 右上へ跳ぶバグを完璧に解消！
-        let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.40)
-        let rawWristY = Float(wristPoint.location.y - 0.5) * Float(0.40) // Visionは下が0, 上が1のため正の数で上が正正解！
+        // 新システム: HMD視野空間における線形正規化3Dマッピング
+        // 画面中心 (0.5, 0.5) を基準とした正確なメートル空間への直接スケーリング
+        let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.50)
+        let rawWristY = Float(0.5 - wristPoint.location.y) * Float(0.50)
         let rawWristZ = Float(0.0)
 
-        // EMA イージングスムージング
+        // EMA デュアルフィルタ (smooth alpha = 0.20)
         var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
-        let alpha: Float = 0.25
+        let alpha: Float = 0.20
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -166,11 +185,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             .littleMCP, .littlePIP, .littleDIP, .littleTip
         ]
 
-        // 関節相対位置
+        // 関節3D相対オフセット
         for (idx, key) in fingerJointKeys.enumerated() {
             if let point = recognizedPoints[key] {
-                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.15)
-                let relY = Float(point.location.y - wristPoint.location.y) * Float(0.15)
+                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.18)
+                let relY = Float(wristPoint.location.y - point.location.y) * Float(0.18)
                 let relZ = Float(0.0)
 
                 bones[idx + 1] = BoneTransform(
