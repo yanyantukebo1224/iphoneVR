@@ -1,7 +1,7 @@
 #include "hmd_device_driver.h"
 #include <cstring>
 
-HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(0) {
+HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(vr::k_unTrackedDeviceIndexInvalid), m_ulPropertyContainer(vr::k_ulInvalidPropertyContainer) {
     std::memset(&m_pose, 0, sizeof(m_pose));
     m_pose.poseIsValid = true;
     m_pose.deviceIsConnected = true;
@@ -16,6 +16,15 @@ HMDDeviceDriver::~HMDDeviceDriver() {}
 
 vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     m_unObjectId = unObjectId;
+    m_ulPropertyContainer = vr::VRProperties()->TrackedDeviceToPropertyContainer(m_unObjectId);
+
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, "iPhoneVR HMD");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, "generic_hmd");
+    vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_UserIpdMeters_Float, 0.063f);
+    vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_DisplayFrequency_Float, 60.0f);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, true);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_HasDisplayComponent_Bool, true);
+
     return vr::VRInitError_None;
 }
 
@@ -26,16 +35,11 @@ void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
     return nullptr;
 }
 
-// Display Component Implementation
 void HMDDeviceDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
     *pnX = 0;
     *pnY = 0;
     *pnWidth = 2532;
     *pnHeight = 1170;
-}
-
-void HMDDeviceDriver::GetIsOnDesktop(bool* pbIsOnDesktop) {
-    *pbIsOnDesktop = true;
 }
 
 void HMDDeviceDriver::GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t* pnHeight) {
@@ -61,17 +65,6 @@ void HMDDeviceDriver::GetProjectionRaw(vr::EVREye eEye, float* pfLeft, float* pf
     *pfBottom = 1.0f;
 }
 
-vr::HmdMatrix34_t HMDDeviceDriver::GetEyeToHeadTransform(vr::EVREye eEye) {
-    vr::HmdMatrix34_t mat{};
-    mat.m[0][0] = 1.0f;
-    mat.m[1][1] = 1.0f;
-    mat.m[2][2] = 1.0f;
-
-    float ipdOffset = 0.0315f;
-    mat.m[0][3] = (eEye == vr::Eye_Left) ? -ipdOffset : ipdOffset;
-    return mat;
-}
-
 void HMDDeviceDriver::UpdateHeadPose(const Vector3f& headPos, const Quaternionf& headRot) {
     m_pose.poseIsValid = true;
     m_pose.result = vr::TrackingResult_Running_OK;
@@ -84,4 +77,8 @@ void HMDDeviceDriver::UpdateHeadPose(const Vector3f& headPos, const Quaternionf&
     m_pose.qRotation.x = m_config.invertRotX ? -headRot.x : headRot.x;
     m_pose.qRotation.y = m_config.invertRotY ? -headRot.y : headRot.y;
     m_pose.qRotation.z = m_config.invertRotZ ? -headRot.z : headRot.z;
+
+    if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
+        vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
+    }
 }

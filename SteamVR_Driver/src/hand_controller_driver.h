@@ -1,7 +1,7 @@
 #ifndef HAND_CONTROLLER_DRIVER_H
 #define HAND_CONTROLLER_DRIVER_H
 
-#include "openvr_driver_stub.h"
+#include "openvr_driver.h"
 #include "tracking_protocol.h"
 #include <string>
 
@@ -10,7 +10,6 @@ public:
     HandControllerDriver(vr::ETrackedControllerRole role);
     virtual ~HandControllerDriver();
 
-    // ITrackedDeviceServerDriver 仮想関数
     virtual vr::EVRInitError Activate(uint32_t unObjectId) override;
     virtual void Deactivate() override {}
     virtual void EnterStandby() override {}
@@ -29,6 +28,8 @@ private:
     vr::ETrackedControllerRole m_role;
     vr::DriverPose_t m_pose;
     uint32_t m_unObjectId;
+    vr::PropertyContainerHandle_t m_ulPropertyContainer;
+    vr::VRInputComponentHandle_t m_ulSkeletonComponent;
     bool m_isTracked;
 };
 
