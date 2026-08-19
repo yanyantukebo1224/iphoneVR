@@ -2,7 +2,6 @@ import Foundation
 import Network
 import simd
 
-// Swift バイナリデータ生成器 (C struct TrackingPacket と 100% 完全パッキング互換)
 class BinaryUDPStreamer {
     private var connection: NWConnection?
     private let queue = DispatchQueue(label: "com.iphonevr.udp.stream", qos: .userInteractive)
@@ -23,7 +22,7 @@ class BinaryUDPStreamer {
         sequenceNumber += 1
         var data = Data()
 
-        // 1. Header
+        // 1. ヘッダー
         var magic: UInt32 = 0x52565049 // "IPVR"
         var seq = sequenceNumber
         var ts = Date().timeIntervalSince1970
@@ -48,11 +47,11 @@ class BinaryUDPStreamer {
         data.append(UnsafeBufferPointer(start: &ry, count: 1))
         data.append(UnsafeBufferPointer(start: &rz, count: 1))
 
-        // 2. Hands (0: Left, 1: Right)
+        // 2. 左右の手データ (0: 左手, 1: 右手)
         appendHandData(hand: leftHand, defaultChirality: 0, to: &data)
         appendHandData(hand: rightHand, defaultChirality: 1, to: &data)
 
-        // 3. 低遅延送信
+        // 3. 高速UDP送信
         connection.send(content: data, completion: .contentProcessed({ error in
             if let error = error {
                 print("UDP Send Error: \(error)")
@@ -61,28 +60,26 @@ class BinaryUDPStreamer {
     }
 
     private func appendHandData(hand: HandPacketData?, defaultChirality: UInt8, to data: inout Data) {
-        var chirality = hand?.chirality ?? defaultChirality
-        var isTracked = hand?.isTracked ?? 0
-        var isPinching = hand?.isPinching ?? 0
-        var pinchDist = hand?.pinchDistance ?? 0.0
+        var chirality = defaultChirality
+        var isTracked: UInt8 = (hand != nil) ? 1 : 0
+        var isPinching: UInt8 = hand?.isPinching ?? 0
+        var pinchDist: Float = hand?.pinchDistance ?? 1.0
 
         data.append(UnsafeBufferPointer(start: &chirality, count: 1))
         data.append(UnsafeBufferPointer(start: &isTracked, count: 1))
         data.append(UnsafeBufferPointer(start: &isPinching, count: 1))
         data.append(UnsafeBufferPointer(start: &pinchDist, count: 1))
 
+        var dummyBone = BoneTransform(
+            position: Vector3f(x: 0, y: 0, z: 0),
+            orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
+        )
+
         if let hand = hand {
-            let mirror = Mirror(reflecting: hand.joints)
-            for child in mirror.children {
-                if var bone = child.value as? BoneTransform {
-                    data.append(UnsafeBufferPointer(start: &bone, count: 1))
-                }
+            withUnsafeBytes(of: hand.joints) { rawPtr in
+                data.append(rawPtr.bindMemory(to: UInt8.self))
             }
         } else {
-            var dummyBone = BoneTransform(
-                position: Vector3f(x: 0, y: 0, z: 0),
-                orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
-            )
             for _ in 0..<21 {
                 data.append(UnsafeBufferPointer(start: &dummyBone, count: 1))
             }
