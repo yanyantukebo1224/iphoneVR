@@ -8,6 +8,11 @@ BUILD_DIR="$PROJECT_DIR/build"
 
 mkdir -p "$BUILD_DIR"
 
+# Ensure all submodules and nested source files are initialized in CI runner
+cd "$PROJECT_DIR/.."
+git submodule update --init --recursive || true
+cd "$PROJECT_DIR"
+
 # Xcode build command for Moonlight.xcodeproj
 xcodebuild -project "$PROJECT_DIR/Moonlight.xcodeproj" \
   -scheme Moonlight \
