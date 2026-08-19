@@ -11,5 +11,9 @@
     "secondsFromVsyncToPhotons": 0.011,
     "displayFrequency": 60.0,
     "IPD": 0.063
+  },
+  "steamvr": {
+    "activateMultipleDrivers": true,
+    "forcedDriver": "driver_iphonevr"
   }
 }
