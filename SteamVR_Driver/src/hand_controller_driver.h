@@ -5,24 +5,30 @@
 #include "tracking_protocol.h"
 #include <string>
 
-class HandControllerDriver {
+class HandControllerDriver : public vr::ITrackedDeviceServerDriver {
 public:
     HandControllerDriver(vr::ETrackedControllerRole role);
-    ~HandControllerDriver();
+    virtual ~HandControllerDriver();
+
+    // ITrackedDeviceServerDriver 仮想関数
+    virtual vr::EVRInitError Activate(uint32_t unObjectId) override;
+    virtual void Deactivate() override {}
+    virtual void EnterStandby() override {}
+    virtual void* GetComponent(const char* pchComponentNameAndVersion) override { return nullptr; }
+    virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
+    virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
     void UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos);
     
-    // SteamVR 31ボーン変換処理 (ポプちゃん指示 ① 実装)
     static void ConvertVision21ToSteamVR31(
         const HandPacketData& handData,
         vr::VRBoneTransform_t outBones[31]
     );
 
-    vr::DriverPose_t GetPose() const { return m_pose; }
-
 private:
     vr::ETrackedControllerRole m_role;
     vr::DriverPose_t m_pose;
+    uint32_t m_unObjectId;
     bool m_isTracked;
 };
 

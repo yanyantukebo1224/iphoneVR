@@ -9,6 +9,9 @@ namespace vr {
 typedef uint32_t DriverId_t;
 typedef uint32_t PropertyContainerHandle_t;
 typedef uint32_t VRInputComponentHandle_t;
+typedef uint32_t TrackedDeviceIndex_t;
+
+static const char* const IServerTrackedDeviceProvider_Version = "IServerTrackedDeviceProvider_004";
 
 enum ETrackedDeviceClass {
     TrackedDeviceClass_Invalid = 0,
@@ -72,21 +75,6 @@ struct VRBoneTransform_t {
     HmdQuaternion_t orientation;
 };
 
-enum EVRSkeletalMetaData {
-    VRSkeletalMetaData_None = 0,
-};
-
-enum EVRSkeletalMotionRange {
-    VRSkeletalMotionRange_WithController = 0,
-    VRSkeletalMotionRange_WithoutController = 1,
-};
-
-enum EVRSkeletalTransformSpace {
-    VRSkeletalTransformSpace_Model = 0,
-    VRSkeletalTransformSpace_Parent = 1,
-};
-
-// SteamVR 31ボーンインデックス
 enum ESteamVRBoneIndex {
     STEAMVR_BONE_ROOT = 0,
     STEAMVR_BONE_WRIST = 1,
@@ -125,6 +113,30 @@ enum ESteamVRBoneIndex {
 enum EVRInitError {
     VRInitError_None = 0,
     VRInitError_Init_Failed = 100,
+    VRInitError_Init_InterfaceNotFound = 105
+};
+
+class IVRDriverContext;
+
+class IServerTrackedDeviceProvider {
+public:
+    virtual EVRInitError Init(IVRDriverContext* pDriverContext) = 0;
+    virtual void Cleanup() = 0;
+    virtual const char* const* GetInterfaceVersions() { return nullptr; }
+    virtual void RunFrame() = 0;
+    virtual bool ShouldBlockStandbyMode() = 0;
+    virtual void EnterStandby() = 0;
+    virtual void LeaveStandby() = 0;
+};
+
+class ITrackedDeviceServerDriver {
+public:
+    virtual EVRInitError Activate(uint32_t unObjectId) = 0;
+    virtual void Deactivate() = 0;
+    virtual void EnterStandby() = 0;
+    virtual void* GetComponent(const char* pchComponentNameAndVersion) = 0;
+    virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) = 0;
+    virtual DriverPose_t GetPose() = 0;
 };
 
 } // namespace vr

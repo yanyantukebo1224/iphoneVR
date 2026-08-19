@@ -5,36 +5,40 @@
 #include "tracking_protocol.h"
 
 struct CoordinateConfig {
-    // 位置の軸反転設定
-    float posXMultiplier = 1.0f; // -1.0f で反転
+    float posXMultiplier = 1.0f;
     float posYMultiplier = 1.0f;
     float posZMultiplier = 1.0f;
 
-    // クォータニオン(回転)軸の反転・スワップフラグ (ポプちゃん指示 ③ 実装)
     bool invertRotW = false;
     bool invertRotX = false;
     bool invertRotY = false;
     bool invertRotZ = false;
     
-    // 位置オフセット (キャリブレーション用)
     float offsetX = 0.0f;
     float offsetY = 0.0f;
     float offsetZ = 0.0f;
 };
 
-class HMDDeviceDriver {
+class HMDDeviceDriver : public vr::ITrackedDeviceServerDriver {
 public:
     HMDDeviceDriver();
-    ~HMDDeviceDriver();
+    virtual ~HMDDeviceDriver();
+
+    // ITrackedDeviceServerDriver 仮想関数
+    virtual vr::EVRInitError Activate(uint32_t unObjectId) override;
+    virtual void Deactivate() override {}
+    virtual void EnterStandby() override {}
+    virtual void* GetComponent(const char* pchComponentNameAndVersion) override { return nullptr; }
+    virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
+    virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
     void UpdateHeadPose(const Vector3f& headPos, const Quaternionf& headRot);
-    
-    vr::DriverPose_t GetPose() const { return m_pose; }
     CoordinateConfig& GetConfig() { return m_config; }
 
 private:
     vr::DriverPose_t m_pose;
     CoordinateConfig m_config;
+    uint32_t m_unObjectId;
 };
 
 #endif // HMD_DEVICE_DRIVER_H
