@@ -13,6 +13,7 @@
 		A10000042C12345600000004 /* MoonlightVRViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000042C12345600000004 /* MoonlightVRViewController.swift */; };
 		A10000052C12345600000005 /* DistortionShader.metal in Sources */ = {isa = PBXBuildFile; fileRef = B10000052C12345600000005 /* DistortionShader.metal */; };
 		A10000062C12345600000006 /* MoonlightHMDApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000062C12345600000006 /* MoonlightHMDApp.swift */; };
+		A10000072C12345600000007 /* TrackingProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000072C12345600000007 /* TrackingProtocol.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +24,7 @@
 		B10000042C12345600000004 /* MoonlightVRViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MoonlightVRViewController.swift; path = MoonlightHMD/VRRender/MoonlightVRViewController.swift; sourceTree = "<group>"; };
 		B10000052C12345600000005 /* DistortionShader.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; name = DistortionShader.metal; path = MoonlightHMD/VRRender/DistortionShader.metal; sourceTree = "<group>"; };
 		B10000062C12345600000006 /* MoonlightHMDApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MoonlightHMDApp.swift; path = MoonlightHMD/App/MoonlightHMDApp.swift; sourceTree = "<group>"; };
+		B10000072C12345600000007 /* TrackingProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrackingProtocol.swift; path = MoonlightHMD/Network/TrackingProtocol.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -32,6 +34,7 @@
 				B10000012C12345600000001 /* ARHandTrackerManager.swift */,
 				B10000022C12345600000002 /* HandGestureProcessor.swift */,
 				B10000032C12345600000003 /* BinaryUDPStreamer.swift */,
+				B10000072C12345600000007 /* TrackingProtocol.swift */,
 				B10000042C12345600000004 /* MoonlightVRViewController.swift */,
 				B10000052C12345600000005 /* DistortionShader.metal */,
 				B10000062C12345600000006 /* MoonlightHMDApp.swift */,
@@ -93,6 +96,7 @@
 				A10000012C12345600000001 /* ARHandTrackerManager.swift in Sources */,
 				A10000022C12345600000002 /* HandGestureProcessor.swift in Sources */,
 				A10000032C12345600000003 /* BinaryUDPStreamer.swift in Sources */,
+				A10000072C12345600000007 /* TrackingProtocol.swift in Sources */,
 				A10000042C12345600000004 /* MoonlightVRViewController.swift in Sources */,
 				A10000052C12345600000005 /* DistortionShader.metal in Sources */,
 				A10000062C12345600000006 /* MoonlightHMDApp.swift in Sources */,
@@ -102,51 +106,71 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		G10000002C12345600000001 /* Debug */ = {
+		F10000002C12345600000004 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_BITCODE = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
 				INFOPLIST_FILE = MoonlightHMD/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.iphonevr.MoonlightHMD;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		G10000002C12345600000002 /* Release */ = {
+		F10000002C12345600000005 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_BITCODE = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
 				INFOPLIST_FILE = MoonlightHMD/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.iphonevr.MoonlightHMD;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		G10000002C12345600000003 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				SDKROOT = iphoneos;
-			};
-			name = Debug;
-		};
-		G10000002C12345600000004 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				SDKROOT = iphoneos;
 			};
 			name = Release;
 		};
@@ -156,8 +180,8 @@
 		F10000002C12345600000002 /* Build configuration list for PBXProject "MoonlightHMD" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				G10000002C12345600000003 /* Debug */,
-				G10000002C12345600000004 /* Release */,
+				F10000002C12345600000004 /* Debug */,
+				F10000002C12345600000005 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -165,8 +189,8 @@
 		F10000002C12345600000003 /* Build configuration list for PBXNativeTarget "MoonlightHMD" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				G10000002C12345600000001 /* Debug */,
-				G10000002C12345600000002 /* Release */,
+				F10000002C12345600000004 /* Debug */,
+				F10000002C12345600000005 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
