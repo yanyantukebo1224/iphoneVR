@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 
 @main
 struct MoonlightHMDApp: App {
@@ -10,7 +11,6 @@ struct MoonlightHMDApp: App {
     @AppStorage("pc_target_ip") private var pcTargetIP: String = "192.168.0.13"
 
     init() {
-        // iPhone画面のスリープ（消灯）を絶対発生させない！
         UIApplication.shared.isIdleTimerDisabled = true
     }
 
@@ -41,29 +41,41 @@ struct ContentView: View {
     @Binding var targetIP: String
 
     @State private var isStreaming = false
+    @State private var cameraPermissionGranted = false
+    @State private var errorMessage: String? = nil
 
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
             if isStreaming {
-                // アプリ単体で動作するMetal 2眼 VR画面ストリームビューアー (Moonlight統合)
                 ZStack(alignment: .topLeading) {
                     VRStreamViewControllerRepresentable()
                         .edgesIgnoringSafeArea(.all)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("VR HMD Streaming & Tracking Active")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                            .bold()
-                        Text("Head: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("MOONLIGHT VR STREAM & 6DOF ACTIVE")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                                .bold()
+                        }
+                        Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
                             .font(.caption2)
                             .foregroundColor(.white)
+                        Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked" : "Searching...")")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                        Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Searching...")")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
                     }
-                    .padding(8)
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(8)
+                    .padding(10)
+                    .background(Color.black.opacity(0.75))
+                    .cornerRadius(10)
                     .padding()
 
                     VStack {
@@ -71,10 +83,12 @@ struct ContentView: View {
                         HStack {
                             Spacer()
                             Button(action: toggleStreaming) {
-                                Text("Exit HMD Mode")
+                                Text("Disconnect VR Stream")
                                     .font(.caption)
-                                    .padding(8)
-                                    .background(Color.red.opacity(0.8))
+                                    .bold()
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 14)
+                                    .background(Color.red.opacity(0.85))
                                     .foregroundColor(.white)
                                     .cornerRadius(8)
                             }
@@ -83,56 +97,78 @@ struct ContentView: View {
                     }
                 }
             } else {
-                VStack(spacing: 20) {
-                    Text("Moonlight 6DoF & Hand Tracking HMD")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .bold()
-
-                    HStack {
-                        Text("PC IP Address:")
+                VStack(spacing: 22) {
+                    VStack(spacing: 6) {
+                        Text("Moonlight Native VR HMD")
+                            .font(.title)
+                            .foregroundColor(.white)
+                            .bold()
+                        Text("Sunshine / GameStream Low-Latency Streamer")
+                            .font(.caption)
                             .foregroundColor(.gray)
-                        TextField("192.168.x.x", text: $targetIP)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .frame(width: 200)
                     }
 
-                    Button(action: toggleStreaming) {
-                        Text("Start VR HMD Mode")
-                            .font(.headline)
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Target Host PC Address:")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            TextField("192.168.x.x", text: $targetIP)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .keyboardType(.decimalPad)
+                                .frame(width: 260)
+                        }
+
+                        Button(action: requestCameraAndStart) {
+                            HStack {
+                                Image(systemName: "play.fill")
+                                Text("Connect & Start VR HMD")
+                                    .font(.headline)
+                            }
                             .padding()
-                            .frame(width: 240)
+                            .frame(width: 260)
                             .background(Color.blue)
                             .foregroundColor(.white)
                             .cornerRadius(12)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Tracking & Built-in Streamer:")
-                            .foregroundColor(.yellow)
-                        Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
-                            .foregroundColor(.white)
-                            .font(.caption)
-                        Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked" : "Lost")")
-                            .foregroundColor(.white)
-                            .font(.caption)
-                        Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Lost")")
-                            .foregroundColor(.white)
-                            .font(.caption)
-                        Text("Moonlight Embedded VR Engine: READY")
-                            .foregroundColor(.green)
-                            .font(.caption2)
-                            .bold()
+                        }
                     }
                     .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(8)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(16)
+
+                    if let err = errorMessage {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .padding(.horizontal)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Moonlight Engine Status:")
+                            .foregroundColor(.yellow)
+                            .font(.caption)
+                            .bold()
+                        Text("• VideoToolbox H.264/HEVC Decoder: Ready")
+                            .foregroundColor(.white)
+                            .font(.caption2)
+                        Text("• ARKit 6DoF + Vision 21-Joint Tracker: Ready")
+                            .foregroundColor(.white)
+                            .font(.caption2)
+                        Text("• Camera Permission: \(cameraPermissionGranted ? "Granted" : "Pending Approval")")
+                            .foregroundColor(cameraPermissionGranted ? .green : .orange)
+                            .font(.caption2)
+                    }
+                    .padding()
+                    .frame(width: 280, alignment: .leading)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(10)
                 }
                 .padding()
             }
         }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
+            checkCameraPermission()
 
             trackerManager.onTrackingDataUpdated = { headPos, headRot, left, right in
                 gestureProcessor.processHandState(leftHand: left, rightHand: right)
@@ -143,12 +179,48 @@ struct ContentView: View {
         }
     }
 
+    private func checkCameraPermission() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            cameraPermissionGranted = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    self.cameraPermissionGranted = granted
+                }
+            }
+        default:
+            cameraPermissionGranted = false
+        }
+    }
+
+    private func requestCameraAndStart() {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        if status == .authorized {
+            toggleStreaming()
+        } else if status == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    self.cameraPermissionGranted = granted
+                    if granted {
+                        self.toggleStreaming()
+                    } else {
+                        self.errorMessage = "Camera permission is required for 6DoF tracking."
+                    }
+                }
+            }
+        } else {
+            errorMessage = "Camera access denied in Settings. Please allow camera access."
+        }
+    }
+
     private func toggleStreaming() {
         if isStreaming {
             streamer.stop()
             trackerManager.stopTracking()
             isStreaming = false
         } else {
+            errorMessage = nil
             UIApplication.shared.isIdleTimerDisabled = true
             streamer.connect(targetIP: targetIP, port: 9050)
             trackerManager.startTracking()
