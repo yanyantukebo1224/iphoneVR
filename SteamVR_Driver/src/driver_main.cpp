@@ -8,36 +8,57 @@
 
 class ServerTrackedDeviceProvider : public vr::IServerTrackedDeviceProvider {
 public:
-    ServerTrackedDeviceProvider() {}
+    ServerTrackedDeviceProvider()
+        : m_pHmdDriver(nullptr), m_pLeftHandDriver(nullptr), m_pRightHandDriver(nullptr), m_pUdpReceiver(nullptr) {}
     virtual ~ServerTrackedDeviceProvider() {}
 
     virtual vr::EVRInitError Init(vr::IVRDriverContext* pDriverContext) override {
-        // 公式 OpenVR Driver Context マクロによる初期化
         VR_INIT_SERVER_DRIVER_CONTEXT(pDriverContext);
 
-        g_hmdDriver = std::make_unique<HMDDeviceDriver>();
-        g_leftHandDriver = std::make_unique<HandControllerDriver>(vr::TrackedControllerRole_LeftHand);
-        g_rightHandDriver = std::make_unique<HandControllerDriver>(vr::TrackedControllerRole_RightHand);
+        m_pHmdDriver = new HMDDeviceDriver();
+        m_pLeftHandDriver = new HandControllerDriver(vr::TrackedControllerRole_LeftHand);
+        m_pRightHandDriver = new HandControllerDriver(vr::TrackedControllerRole_RightHand);
 
-        // Tracked Devices の追加登録
-        vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_HMD_001", vr::TrackedDeviceClass_HMD, g_hmdDriver.get());
-        vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_LeftHand_001", vr::TrackedDeviceClass_Controller, g_leftHandDriver.get());
-        vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_RightHand_001", vr::TrackedDeviceClass_Controller, g_rightHandDriver.get());
+        if (vr::VRServerDriverHost()) {
+            vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_HMD_001", vr::TrackedDeviceClass_HMD, m_pHmdDriver);
+            vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_LeftHand_001", vr::TrackedDeviceClass_Controller, m_pLeftHandDriver);
+            vr::VRServerDriverHost()->TrackedDeviceAdded("iPhoneVR_RightHand_001", vr::TrackedDeviceClass_Controller, m_pRightHandDriver);
+        }
 
-        g_udpReceiver = std::make_unique<UDPReceiver>();
-        g_udpReceiver->Start(9050, OnTrackingPacketReceived);
+        m_pUdpReceiver = new UDPReceiver();
+        m_pUdpReceiver->Start(9050, [this](const TrackingPacket& packet) {
+            if (m_pHmdDriver) {
+                m_pHmdDriver->UpdateHeadPose(packet.headPosition, packet.headRotation);
+            }
+            if (m_pLeftHandDriver) {
+                m_pLeftHandDriver->UpdateHandPose(packet.hands[0], packet.headPosition);
+            }
+            if (m_pRightHandDriver) {
+                m_pRightHandDriver->UpdateHandPose(packet.hands[1], packet.headPosition);
+            }
+        });
 
         return vr::VRInitError_None;
     }
 
     virtual void Cleanup() override {
-        if (g_udpReceiver) {
-            g_udpReceiver->Stop();
-            g_udpReceiver.reset();
+        if (m_pUdpReceiver) {
+            m_pUdpReceiver->Stop();
+            delete m_pUdpReceiver;
+            m_pUdpReceiver = nullptr;
         }
-        g_hmdDriver.reset();
-        g_leftHandDriver.reset();
-        g_rightHandDriver.reset();
+        if (m_pHmdDriver) {
+            delete m_pHmdDriver;
+            m_pHmdDriver = nullptr;
+        }
+        if (m_pLeftHandDriver) {
+            delete m_pLeftHandDriver;
+            m_pLeftHandDriver = nullptr;
+        }
+        if (m_pRightHandDriver) {
+            delete m_pRightHandDriver;
+            m_pRightHandDriver = nullptr;
+        }
         VR_CLEANUP_SERVER_DRIVER_CONTEXT();
     }
 
@@ -51,28 +72,11 @@ public:
     virtual void LeaveStandby() override {}
 
 private:
-    static void OnTrackingPacketReceived(const TrackingPacket& packet) {
-        if (g_hmdDriver) {
-            g_hmdDriver->UpdateHeadPose(packet.headPosition, packet.headRotation);
-        }
-        if (g_leftHandDriver) {
-            g_leftHandDriver->UpdateHandPose(packet.hands[0], packet.headPosition);
-        }
-        if (g_rightHandDriver) {
-            g_rightHandDriver->UpdateHandPose(packet.hands[1], packet.headPosition);
-        }
-    }
-
-    static std::unique_ptr<HMDDeviceDriver> g_hmdDriver;
-    static std::unique_ptr<HandControllerDriver> g_leftHandDriver;
-    static std::unique_ptr<HandControllerDriver> g_rightHandDriver;
-    static std::unique_ptr<UDPReceiver> g_udpReceiver;
+    HMDDeviceDriver* m_pHmdDriver;
+    HandControllerDriver* m_pLeftHandDriver;
+    HandControllerDriver* m_pRightHandDriver;
+    UDPReceiver* m_pUdpReceiver;
 };
-
-std::unique_ptr<HMDDeviceDriver> ServerTrackedDeviceProvider::g_hmdDriver = nullptr;
-std::unique_ptr<HandControllerDriver> ServerTrackedDeviceProvider::g_leftHandDriver = nullptr;
-std::unique_ptr<HandControllerDriver> ServerTrackedDeviceProvider::g_rightHandDriver = nullptr;
-std::unique_ptr<UDPReceiver> ServerTrackedDeviceProvider::g_udpReceiver = nullptr;
 
 static ServerTrackedDeviceProvider g_serverTrackedDeviceProvider;
 
