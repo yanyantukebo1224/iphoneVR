@@ -75,11 +75,12 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.qWorldFromDriverRotation.w = 1.0;
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
-    
-    // 見やすい位置 (高さ 1.25m, 前方 -0.30m)
-    float defaultOffsetX = isLeft ? -0.18f : 0.18f;
-    float defaultOffsetY = 1.25f;
-    float defaultOffsetZ = -0.30f;
+    float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
+
+    // 体・胸元を中心とした目線直下の手元人間工学オフセット
+    float defaultOffsetX = isLeft ? -0.20f : 0.20f;
+    float defaultOffsetY = -0.25f; // 胸の高さ
+    float defaultOffsetZ = -0.35f; // 前方35cm
 
     float rawX = handData.joints[VISION_JOINT_WRIST].position.x;
     float rawY = handData.joints[VISION_JOINT_WRIST].position.y;
@@ -115,15 +116,18 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         targetOffsetZ = defaultOffsetZ + rawZ;
     }
 
-    float easingFactor = 0.25f;
+    // 滑らかなレスポンシブ補間 (Easing = 0.30)
+    float easingFactor = 0.30f;
     m_smoothedPosition[0] += (targetOffsetX - m_smoothedPosition[0]) * easingFactor;
     m_smoothedPosition[1] += (targetOffsetY - m_smoothedPosition[1]) * easingFactor;
     m_smoothedPosition[2] += (targetOffsetZ - m_smoothedPosition[2]) * easingFactor;
 
-    m_pose.vecPosition[0] = m_smoothedPosition[0];
-    m_pose.vecPosition[1] = m_smoothedPosition[1];
-    m_pose.vecPosition[2] = m_smoothedPosition[2];
+    // 頭部（HMD）の位置に追従する動的世界空間マッピング（頭が動いても手元から絶対ズレない！）
+    m_pose.vecPosition[0] = headPos.x + m_smoothedPosition[0];
+    m_pose.vecPosition[1] = effectiveHeadY + m_smoothedPosition[1];
+    m_pose.vecPosition[2] = headPos.z + m_smoothedPosition[2];
 
+    // コントローラービーム前向き角度
     m_pose.qRotation.w = 0.92388f;
     m_pose.qRotation.x = 0.38268f;
     m_pose.qRotation.y = 0.0f;
