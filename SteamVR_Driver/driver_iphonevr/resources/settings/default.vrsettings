@@ -1,0 +1,15 @@
+{
+  "driver_iphonevr": {
+    "enable": true,
+    "enableDirectMode": false,
+    "windowX": 0,
+    "windowY": 0,
+    "windowWidth": 2532,
+    "windowHeight": 1170,
+    "renderWidth": 1266,
+    "renderHeight": 1170,
+    "secondsFromVsyncToPhotons": 0.011,
+    "displayFrequency": 60.0,
+    "IPD": 0.063
+  }
+}

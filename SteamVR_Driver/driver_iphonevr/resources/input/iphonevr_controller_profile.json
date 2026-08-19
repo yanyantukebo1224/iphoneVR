@@ -1,0 +1,16 @@
+{
+  "json_version": 2,
+  "controller_type": "iphonevr_hand_controller",
+  "category": "controller",
+  "resource_name": "iPhoneVR Hand Controller",
+  "input_bindings": {
+    "/user/hand/left/input/skeleton/left": {
+      "output": "/actions/default/in/skeleton_left"
+    },
+    "/user/hand/right/input/skeleton/right": {
+      "output": "/actions/default/in/skeleton_right"
+    }
+  },
+  "skeleton_path": "/user/hand/left/input/skeleton/left",
+  "skeleton_right_path": "/user/hand/right/input/skeleton/right"
+}

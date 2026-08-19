@@ -1,0 +1,12 @@
+{
+  "resourceOnly": false,
+  "hmd_types": [
+    "iphonevr"
+  ],
+  "driver_declarations": [
+    {
+      "name": "iphonevr",
+      "hmd_type": "iphonevr"
+    }
+  ]
+}
