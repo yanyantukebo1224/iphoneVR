@@ -70,16 +70,15 @@ void UDPReceiver::ReceiveLoop() {
         return;
     }
 
-    uint8_t buffer[sizeof(TrackingPacket) + 128];
+    uint8_t buffer[2048];
 
     while (m_running) {
         sockaddr_in clientAddr{};
         socklen_t clientAddrLen = sizeof(clientAddr);
 
         int bytesReceived = recvfrom(sock, (char*)buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
-        if (bytesReceived == sizeof(TrackingPacket)) {
+        if (bytesReceived >= sizeof(TrackingPacket)) {
             TrackingPacket packet;
-            // ポプちゃん指示 ② memcpy一発で高速デコード！
             std::memcpy(&packet, buffer, sizeof(TrackingPacket));
 
             if (packet.magic == IPPHONE_VR_MAGIC) {
