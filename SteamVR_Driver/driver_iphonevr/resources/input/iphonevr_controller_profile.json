@@ -9,6 +9,18 @@
     },
     "/user/hand/right/input/skeleton/right": {
       "output": "/actions/default/in/skeleton_right"
+    },
+    "/user/hand/left/input/trigger/click": {
+      "output": "/actions/default/in/interact"
+    },
+    "/user/hand/right/input/trigger/click": {
+      "output": "/actions/default/in/interact"
+    },
+    "/user/hand/left/input/grip/click": {
+      "output": "/actions/default/in/grab"
+    },
+    "/user/hand/right/input/grip/click": {
+      "output": "/actions/default/in/grab"
     }
   },
   "skeleton_path": "/user/hand/left/input/skeleton/left",

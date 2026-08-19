@@ -17,6 +17,7 @@ public:
     virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
     virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
+    // 手位置 ＆ 指ジェスチャーコントローラー入力更新 (ポプちゃん指示 動作＆操作)
     void UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos);
     
     static void ConvertVision21ToSteamVR31(
@@ -29,7 +30,13 @@ private:
     vr::DriverPose_t m_pose;
     uint32_t m_unObjectId;
     vr::PropertyContainerHandle_t m_ulPropertyContainer;
+
+    // SteamVR Input Components (トリガー・クリック・グリップ入力)
     vr::VRInputComponentHandle_t m_ulSkeletonComponent;
+    vr::VRInputComponentHandle_t m_ulTriggerClickComponent;
+    vr::VRInputComponentHandle_t m_ulTriggerValueComponent;
+    vr::VRInputComponentHandle_t m_ulGripClickComponent;
+
     bool m_isTracked;
 };
 
