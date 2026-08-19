@@ -77,6 +77,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
 
+    // 体を中心とした正確な基準位置 (左手: 体の左 -0.20m, 右手: 体の右 +0.20m)
     float defaultOffsetX = isLeft ? -0.20f : 0.20f;
     float defaultOffsetY = -0.22f;
     float defaultOffsetZ = -0.35f;
@@ -89,10 +90,13 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (rawY != rawY) rawY = 0.0f;
     if (rawZ != rawZ) rawZ = 0.0f;
 
-    // 異常値飛びガード
-    if (std::abs(rawX) > 0.60f) rawX = (rawX > 0) ? 0.60f : -0.60f;
-    if (std::abs(rawY) > 0.60f) rawY = (rawY > 0) ? 0.60f : -0.60f;
-    if (std::abs(rawZ) > 0.60f) rawZ = (rawZ > 0) ? 0.60f : -0.60f;
+    // 異常飛び跳ねガード (Max ±0.40m 範囲内制限)
+    if (rawX > 0.40f) rawX = 0.40f;
+    if (rawX < -0.40f) rawX = -0.40f;
+    if (rawY > 0.40f) rawY = 0.40f;
+    if (rawY < -0.40f) rawY = -0.40f;
+    if (rawZ > 0.40f) rawZ = 0.40f;
+    if (rawZ < -0.40f) rawZ = -0.40f;
 
     auto now = std::chrono::steady_clock::now();
     float deltaMovement = std::sqrt(
@@ -101,7 +105,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         (rawZ - m_lastPosition[2]) * (rawZ - m_lastPosition[2])
     );
 
-    if (handData.isTracked == 1 && deltaMovement > 0.002f) {
+    if (handData.isTracked == 1 && deltaMovement > 0.001f) {
         m_lastMovementTime = now;
         m_lastPosition[0] = rawX;
         m_lastPosition[1] = rawY;
@@ -114,14 +118,15 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     float targetOffsetY = defaultOffsetY;
     float targetOffsetZ = defaultOffsetZ;
 
+    // 3秒移動なし/非検知の時のみ初期胸元位置にスムーズリセット
     if (elapsedSeconds < 3 && handData.isTracked == 1) {
         targetOffsetX = defaultOffsetX + rawX;
         targetOffsetY = defaultOffsetY + rawY;
         targetOffsetZ = defaultOffsetZ + rawZ;
     }
 
-    // Cubic Ease-Out イージング補間
-    float easingFactor = 0.25f;
+    // なめらかなイージング補間 (EMA Smoothing)
+    float easingFactor = 0.20f;
     m_smoothedPosition[0] += (targetOffsetX - m_smoothedPosition[0]) * easingFactor;
     m_smoothedPosition[1] += (targetOffsetY - m_smoothedPosition[1]) * easingFactor;
     m_smoothedPosition[2] += (targetOffsetZ - m_smoothedPosition[2]) * easingFactor;
@@ -130,6 +135,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.vecPosition[1] = effectiveHeadY + m_smoothedPosition[1];
     m_pose.vecPosition[2] = headPos.z + m_smoothedPosition[2];
 
+    // 前方にポインター線が伸びる角度
     m_pose.qRotation.w = 0.92388f;
     m_pose.qRotation.x = 0.38268f;
     m_pose.qRotation.y = 0.0f;

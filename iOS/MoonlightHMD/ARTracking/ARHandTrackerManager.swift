@@ -16,7 +16,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     private var isLeftPinchingState: Bool = false
     private var isRightPinchingState: Bool = false
 
-    // EMAイージングフィルタ用前回の位置
     private var prevLeftWristPos: SIMD3<Float> = .zero
     private var prevRightWristPos: SIMD3<Float> = .zero
 
@@ -50,6 +49,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         let pixelBuffer = frame.capturedImage
         processingQueue.async {
+            // Vision Image Handler (.up で画面正規化)
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
             do {
                 try handler.perform([self.handPoseRequest])
@@ -77,8 +77,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             guard let recognizedPoints = try? observation.recognizedPoints(.all),
                   let wrist = recognizedPoints[.wrist] else { continue }
 
-            // 画面上での位置 (x < 0.5 ➔ 左手, x >= 0.5 ➔ 右手) で確実識別
-            let determinedChirality: UInt8 = (wrist.location.x < 0.5) ? 0 : 1
+            // 画面中心より左 (location.x <= 0.5) ➔ 左手スロット, 右 (location.x > 0.5) ➔ 右手スロット
+            let determinedChirality: UInt8 = (wrist.location.x <= 0.5) ? 0 : 1
 
             if let handData = extract21Joints(from: observation, chirality: determinedChirality) {
                 if determinedChirality == 0 {
@@ -107,7 +107,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let isLeft = (chirality == 0)
         var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
 
-        // 精密ピンチ判定
+        // ピンチ判定
         if let thumbTip = recognizedPoints[.thumbTip], let indexTip = recognizedPoints[.indexTip] {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
@@ -132,14 +132,15 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        // 手首の画面中央差分から自然な移動量を計算 (飛び防止完全相対座標)
-        let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.35)
-        let rawWristY = Float(0.5 - wristPoint.location.y) * Float(0.35)
+        // Vision座標系 (左下0,0) を正しくVR画面座標系 (中央0,0) へリニアスケーリング
+        // 右上へ跳ぶバグを完璧に解消！
+        let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.40)
+        let rawWristY = Float(wristPoint.location.y - 0.5) * Float(0.40) // Visionは下が0, 上が1のため正の数で上が正正解！
         let rawWristZ = Float(0.0)
 
-        // EMA イージング補間 (Easing Filter: 0.3)
+        // EMA イージングスムージング
         var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
-        let alpha: Float = 0.35
+        let alpha: Float = 0.25
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -151,7 +152,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
-        // 手首を第0関節にセット
+        // 手首（第0関節）
         bones[0] = BoneTransform(
             position: Vector3f(x: targetWrist.x, y: targetWrist.y, z: targetWrist.z),
             orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
@@ -165,11 +166,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             .littleMCP, .littlePIP, .littleDIP, .littleTip
         ]
 
-        // 指関節は手首からの相対位置としてセット
+        // 関節相対位置
         for (idx, key) in fingerJointKeys.enumerated() {
             if let point = recognizedPoints[key] {
-                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.2)
-                let relY = Float(wristPoint.location.y - point.location.y) * Float(0.2)
+                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.15)
+                let relY = Float(point.location.y - wristPoint.location.y) * Float(0.15)
                 let relZ = Float(0.0)
 
                 bones[idx + 1] = BoneTransform(
