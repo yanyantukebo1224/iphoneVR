@@ -10,6 +10,9 @@ HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(vr::k_unTrackedDeviceIndexInva
     m_pose.qRotation.w = 1.0;
     m_pose.qWorldFromDriverRotation.w = 1.0;
     m_pose.qDriverFromHeadRotation.w = 1.0;
+
+    // 地面埋まり防止：標準目線高さ 1.65m に設定 (ポプちゃん指示 視高調整)
+    m_config.offsetY = 1.65f;
 }
 
 HMDDeviceDriver::~HMDDeviceDriver() {}
@@ -25,7 +28,7 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_HasDisplayComponent_Bool, true);
 
-    UpdateHeadPose(Vector3f{0.0f, 1.2f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
+    UpdateHeadPose(Vector3f{0.0f, 0.0f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
 
     return vr::VRInitError_None;
 }
