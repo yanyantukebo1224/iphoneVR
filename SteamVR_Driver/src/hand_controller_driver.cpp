@@ -28,7 +28,8 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "iphonevr");
+    // 1. コントローラー識別プロパティの完全設定
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "driver_iphonevr");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "iPhoneVR Left Hand" : "iPhoneVR Right Hand");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, isLeft ? "iPhoneVR_LeftHand_001" : "iPhoneVR_RightHand_001");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "Apple/iPhoneVR");
@@ -36,13 +37,16 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{iphonevr}/resources/input/iphonevr_controller_profile.json");
+    
+    // 正確なリソースパス名 {driver_iphonevr} に修復！
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{driver_iphonevr}/resources/input/iphonevr_controller_profile.json");
 
-    const char* skelPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
+    // 2. Skeletal Input (31ボーン 指トラ表示)
+    const char* skelComponentPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
     vr::VRDriverInput()->CreateSkeletonComponent(
         m_ulPropertyContainer,
-        skelPath,
-        skelPath,
+        skelComponentPath,
+        skelComponentPath,
         "/skeleton/hand/left",
         vr::VRSkeletalTracking_Full,
         nullptr,
@@ -50,10 +54,12 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
         &m_ulSkeletonComponent
     );
 
+    // 3. ボタン・トリガー入力の作成
     vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/trigger/click", &m_ulTriggerClickComponent);
     vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/trigger/value", &m_ulTriggerValueComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedOneSided);
     vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/grip/click", &m_ulGripClickComponent);
 
+    // 4. 初期アクティブポーズ通知
     HandPacketData dummyHand{};
     dummyHand.isTracked = 1;
     dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{0.0f, 0.0f, 0.0f};
