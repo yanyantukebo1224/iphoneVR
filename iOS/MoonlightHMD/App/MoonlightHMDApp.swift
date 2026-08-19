@@ -26,6 +26,14 @@ struct MoonlightHMDApp: App {
     }
 }
 
+struct VRStreamViewControllerRepresentable: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> MoonlightVRViewController {
+        return MoonlightVRViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: MoonlightVRViewController, context: Context) {}
+}
+
 struct ContentView: View {
     @ObservedObject var trackerManager: ARHandTrackerManager
     @ObservedObject var gestureProcessor: HandGestureProcessor
@@ -38,55 +46,92 @@ struct ContentView: View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
-            VStack(spacing: 20) {
-                Text("Moonlight 6DoF & Hand Tracking HMD")
-                    .font(.title2)
-                    .foregroundColor(.white)
-                    .bold()
+            if isStreaming {
+                // アプリ単体で動作するMetal 2眼 VR画面ストリームビューアー (Moonlight統合)
+                ZStack(alignment: .topLeading) {
+                    VRStreamViewControllerRepresentable()
+                        .edgesIgnoringSafeArea(.all)
 
-                HStack {
-                    Text("PC IP Address:")
-                        .foregroundColor(.gray)
-                    TextField("192.168.x.x", text: $targetIP)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .frame(width: 200)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("VR HMD Streaming & Tracking Active")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                            .bold()
+                        Text("Head: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                    }
+                    .padding(8)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(8)
+                    .padding()
+
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button(action: toggleStreaming) {
+                                Text("Exit HMD Mode")
+                                    .font(.caption)
+                                    .padding(8)
+                                    .background(Color.red.opacity(0.8))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                            }
+                            .padding()
+                        }
+                    }
                 }
-
-                Button(action: toggleStreaming) {
-                    Text(isStreaming ? "Stop Streaming" : "Start VR HMD Mode")
-                        .font(.headline)
-                        .padding()
-                        .frame(width: 240)
-                        .background(isStreaming ? Color.red : Color.blue)
+            } else {
+                VStack(spacing: 20) {
+                    Text("Moonlight 6DoF & Hand Tracking HMD")
+                        .font(.title2)
                         .foregroundColor(.white)
-                        .cornerRadius(12)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Tracking & Stream Status:")
-                        .foregroundColor(.yellow)
-                    Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
-                        .foregroundColor(.white)
-                        .font(.caption)
-                    Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked" : "Lost")")
-                        .foregroundColor(.white)
-                        .font(.caption)
-                    Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Lost")")
-                        .foregroundColor(.white)
-                        .font(.caption)
-                    Text("Screen Sleep: DISABLED (Keep Awake)")
-                        .foregroundColor(.green)
-                        .font(.caption2)
                         .bold()
+
+                    HStack {
+                        Text("PC IP Address:")
+                            .foregroundColor(.gray)
+                        TextField("192.168.x.x", text: $targetIP)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .frame(width: 200)
+                    }
+
+                    Button(action: toggleStreaming) {
+                        Text("Start VR HMD Mode")
+                            .font(.headline)
+                            .padding()
+                            .frame(width: 240)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Tracking & Built-in Streamer:")
+                            .foregroundColor(.yellow)
+                        Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                        Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked" : "Lost")")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                        Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Lost")")
+                            .foregroundColor(.white)
+                            .font(.caption)
+                        Text("Moonlight Embedded VR Engine: READY")
+                            .foregroundColor(.green)
+                            .font(.caption2)
+                            .bold()
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(8)
                 }
                 .padding()
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
             }
-            .padding()
         }
         .onAppear {
-            // アプリ起動中もスリープ無効化を再保証
             UIApplication.shared.isIdleTimerDisabled = true
 
             trackerManager.onTrackingDataUpdated = { headPos, headRot, left, right in

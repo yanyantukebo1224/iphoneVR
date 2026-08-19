@@ -75,12 +75,11 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.qWorldFromDriverRotation.w = 1.0;
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
-    float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
-
-    // 新システム: 体を中心とした自然なHMD視野空間アンカーオフセット (左: -0.22m, 右: +0.22m)
-    float defaultOffsetX = isLeft ? -0.22f : 0.22f;
-    float defaultOffsetY = -0.22f;
-    float defaultOffsetZ = -0.35f;
+    
+    // 見やすい位置 (高さ 1.25m, 前方 -0.30m)
+    float defaultOffsetX = isLeft ? -0.18f : 0.18f;
+    float defaultOffsetY = 1.25f;
+    float defaultOffsetZ = -0.30f;
 
     float rawX = handData.joints[VISION_JOINT_WRIST].position.x;
     float rawY = handData.joints[VISION_JOINT_WRIST].position.y;
@@ -89,14 +88,6 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (rawX != rawX) rawX = 0.0f;
     if (rawY != rawY) rawY = 0.0f;
     if (rawZ != rawZ) rawZ = 0.0f;
-
-    // クランプガード (飛び跳ね上限制限: 左右±0.30m, 上下±0.30m)
-    if (rawX > 0.30f) rawX = 0.30f;
-    if (rawX < -0.30f) rawX = -0.30f;
-    if (rawY > 0.30f) rawY = 0.30f;
-    if (rawY < -0.30f) rawY = -0.30f;
-    if (rawZ > 0.30f) rawZ = 0.30f;
-    if (rawZ < -0.30f) rawZ = -0.30f;
 
     auto now = std::chrono::steady_clock::now();
     float deltaMovement = std::sqrt(
@@ -118,22 +109,20 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     float targetOffsetY = defaultOffsetY;
     float targetOffsetZ = defaultOffsetZ;
 
-    // 3秒非検知時のみ自然リセット
     if (elapsedSeconds < 3 && handData.isTracked == 1) {
         targetOffsetX = defaultOffsetX + rawX;
         targetOffsetY = defaultOffsetY + rawY;
         targetOffsetZ = defaultOffsetZ + rawZ;
     }
 
-    // 新システム: 超滑らかレスポンシブ補間 (Easing 0.30)
-    float easingFactor = 0.30f;
+    float easingFactor = 0.25f;
     m_smoothedPosition[0] += (targetOffsetX - m_smoothedPosition[0]) * easingFactor;
     m_smoothedPosition[1] += (targetOffsetY - m_smoothedPosition[1]) * easingFactor;
     m_smoothedPosition[2] += (targetOffsetZ - m_smoothedPosition[2]) * easingFactor;
 
-    m_pose.vecPosition[0] = headPos.x + m_smoothedPosition[0];
-    m_pose.vecPosition[1] = effectiveHeadY + m_smoothedPosition[1];
-    m_pose.vecPosition[2] = headPos.z + m_smoothedPosition[2];
+    m_pose.vecPosition[0] = m_smoothedPosition[0];
+    m_pose.vecPosition[1] = m_smoothedPosition[1];
+    m_pose.vecPosition[2] = m_smoothedPosition[2];
 
     m_pose.qRotation.w = 0.92388f;
     m_pose.qRotation.x = 0.38268f;
