@@ -82,7 +82,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         if let observations = results, !observations.isEmpty {
             for observation in observations {
-                // 🖐️ Apple Vision公式の生体力学的左右手判定
+                // 🖐️ Apple Vision公式の左右判定
                 var determinedChirality: UInt32 = 0
                 if observation.chirality == .right {
                     determinedChirality = 1
@@ -90,12 +90,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
                     determinedChirality = 0
                 } else {
                     if let wrist = try? observation.recognizedPoints(.all)[.wrist] {
-                        // リアカメラ視野: 画面左(x <= 0.5)はユーザーの右手(1)、画面右(x > 0.5)はユーザーの左手(0)
                         determinedChirality = (wrist.location.x <= 0.5) ? 1 : 0
                     }
                 }
 
-                if let handData = extract21Joints(from: observation, chirality: determinedChirality, frame: frame) {
+                if let handData = extract21Joints(from: observation, chirality: determinedChirality) {
                     if determinedChirality == 0 {
                         newLeft = handData
                     } else {
@@ -113,7 +112,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         if newLeft == nil {
             var leftDummy = createDefaultHandData(chirality: 0)
             leftDummy.controller = leftInput
-            // コントローラー接続時または直前の手をホールド
             leftDummy.isTracked = (leftInput.isConnected == 1) ? 1 : 0
             newLeft = leftDummy
         } else {
@@ -138,11 +136,12 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     }
 
     private func createDefaultHandData(chirality: UInt32) -> HandPacketData {
-        // 自然な構え位置 (左手: 左胸前方 -0.22m, 右手: 右胸前方 +0.22m)
-        let defaultPos = (chirality == 0) ?
-            Vector3f(x: -0.22, y: -0.25, z: -0.45) :
-            Vector3f(x: 0.22, y: -0.25, z: -0.45)
-
+        let isLeft = (chirality == 0)
+        let defaultPos = Vector3f(
+            x: isLeft ? -0.18 : 0.18,
+            y: -0.15,
+            z: -0.42
+        )
         let wristBone = BoneTransform(position: defaultPos, orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         let tupleJoints = (
@@ -153,7 +152,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         )
         return HandPacketData(
             chirality: chirality,
-            isTracked: 1,
+            isTracked: 0,
             isPinching: 0,
             pinchDistance: 1.0,
             curls: FingerCurls(),
@@ -163,30 +162,26 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         )
     }
 
-    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt32, frame: ARFrame) -> HandPacketData? {
+    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt32) -> HandPacketData? {
         guard let recognizedPoints = try? observation.recognizedPoints(.all),
               let wristPoint = recognizedPoints[.wrist] else { return nil }
 
+        let isLeft = (chirality == 0)
+
+        // 1. ピンチ検出
         var isPinching: UInt32 = 0
         var pinchDist: Float = 1.0
-
-        let isLeft = (chirality == 0)
         var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
 
-        // ピンチ幾何検出
         if let thumbTip = recognizedPoints[.thumbTip], let indexTip = recognizedPoints[.indexTip] {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
             pinchDist = sqrt(dx*dx + dy*dy)
 
             if currentPinchState {
-                if pinchDist > 0.075 {
-                    currentPinchState = false
-                }
+                if pinchDist > 0.075 { currentPinchState = false }
             } else {
-                if pinchDist < 0.045 {
-                    currentPinchState = true
-                }
+                if pinchDist < 0.045 { currentPinchState = true }
             }
 
             if isLeft {
@@ -194,38 +189,27 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             } else {
                 isRightPinchingState = currentPinchState
             }
-
             isPinching = currentPinchState ? 1 : 0
         }
 
-        // 📐 手のひらスパン（手首〜中指付け根）によるリアルタイム奥行き深度 Z 推定 (0.20m ~ 0.85m)
-        var handSpan: Float = 0.18
-        if let middleMCP = recognizedPoints[.middleMCP] {
-            let dx = Float(middleMCP.location.x - wristPoint.location.x)
-            let dy = Float(middleMCP.location.y - wristPoint.location.y)
-            handSpan = max(0.04, sqrt(dx*dx + dy*dy))
-        }
-        let estimatedDepth: Float = max(0.20, min(0.85, 0.055 / handSpan))
+        // 2. 位置計算（手を引く動作を完全封印し、奥行き Z を目の前に固定）
+        // Vision 正規化座標 (0.0 ~ 1.0):
+        // 横向きゴーグル装着時: 左右変位 = (location.y - 0.5), 上下変位 = (0.5 - location.x)
+        let deltaX = Float(wristPoint.location.y - 0.5) * Float(0.65)
+        let deltaY = Float(0.5 - wristPoint.location.x) * Float(0.65)
 
-        // 🖐️ HMD横向き（Landscape）カメラ軸補正 & 2.2倍アンプリファイ（高感度）相対オフセット計算
-        // カメラPortrait座標 -> HMD Landscape空間変換 (XとYの90度回転解消)
-        let motionGain: Float = 2.2
-        let deltaX = Float(wristPoint.location.y - 0.5) * motionGain * Float(0.5)
-        let deltaY = Float(0.5 - wristPoint.location.x) * motionGain * Float(0.5)
-        let deltaZ = Float(estimatedDepth - 0.45) * Float(1.5)
+        // 基準位置: 目の前 (左: -0.18m, 右: +0.18m, 高さ: -0.15m, 奥行き: -0.42m 固定)
+        let basePosX: Float = isLeft ? -0.18 : 0.18
+        let basePosY: Float = -0.15
+        let basePosZ: Float = -0.42
 
-        // 自然な構え位置 (左手: -0.22m, 右手: +0.22m) を基準とした相対位置変位
-        let basePosX: Float = isLeft ? -0.22 : 0.22
-        let basePosY: Float = -0.25
-        let basePosZ: Float = -0.45
+        let rawX = basePosX + deltaX
+        let rawY = basePosY + deltaY
+        let rawZ = basePosZ // 奥行き完全固定（バックに下がるバグを根絶）
 
-        let rawWristX = basePosX + deltaX
-        let rawWristY = basePosY + deltaY
-        let rawWristZ = basePosZ - deltaZ
-
-        // EMA デュアルフィルタ (smooth alpha = 0.35)
-        var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
-        let alpha: Float = 0.35
+        // EMA フィルタで自然な追従
+        var targetWrist = SIMD3<Float>(rawX, rawY, rawZ)
+        let alpha: Float = 0.40
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -234,13 +218,35 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             prevRightWristPos = targetWrist
         }
 
+        // 3. 3D 回転クォータニオン (Orientation) の完全幾何計算
+        var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
+        if let middleMCP = recognizedPoints[.middleMCP] {
+            // 手首 -> 中指付け根の向きベクトル (手のひらの前後軸)
+            let fwdX = Float(middleMCP.location.y - wristPoint.location.y)
+            let fwdY = Float(wristPoint.location.x - middleMCP.location.x)
+            let fwdLen = max(0.001, sqrt(fwdX*fwdX + fwdY*fwdY))
+            let normFwdX = fwdX / fwdLen
+            let normFwdY = fwdY / fwdLen
+
+            // 2D 姿勢角 (Yaw/Roll) から回転クォータニオンを構成
+            let angle = atan2(normFwdX, normFwdY)
+            let halfAngle = angle * 0.5
+            wristQuat = Quaternionf(
+                w: cos(halfAngle),
+                x: 0.0,
+                y: 0.0,
+                z: sin(halfAngle)
+            )
+        }
+
+        // 4. 21 関節ボーンデータの構成
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
-        // 手首（第0関節）
+        // 手首（第0関節）: 正確な位置と回転を設定
         bones[0] = BoneTransform(
             position: Vector3f(x: targetWrist.x, y: targetWrist.y, z: targetWrist.z),
-            orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
+            orientation: wristQuat
         )
 
         let fingerJointKeys: [VNHumanHandPoseObservation.JointName] = [
@@ -253,8 +259,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         for (idx, key) in fingerJointKeys.enumerated() {
             if let point = recognizedPoints[key] {
-                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.18)
-                let relY = Float(wristPoint.location.y - point.location.y) * Float(0.18)
+                let relX = Float(point.location.y - wristPoint.location.y) * Float(0.12)
+                let relY = Float(wristPoint.location.x - point.location.x) * Float(0.12)
                 let relZ = Float(0.0)
 
                 bones[idx + 1] = BoneTransform(

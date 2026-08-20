@@ -28,6 +28,7 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         mtkView = MTKView(frame: view.bounds, device: device)
         mtkView.delegate = self
         mtkView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        mtkView.clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
         view.addSubview(mtkView)
 
         // ポプちゃん指示: CVMetalTextureCache によるゼロコピーテクスチャ初期化

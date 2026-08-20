@@ -67,9 +67,9 @@ fragment float4 vrDistortionFragmentShader(VertexOut in [[stage_in]],
     }
     
     if (is_null_texture(videoTexture)) {
-        // テクスチャ未接続時の立体視グリッドプレースホルダー表示
-        float grid = (fmod(floor(uv.x * 20.0) + floor(uv.y * 20.0), 2.0) == 0.0) ? 0.15 : 0.05;
-        return float4(0.0, grid, isRightEye ? 0.3 : 0.2, 1.0);
+        // テクスチャ未接続時の立体視グリッドプレースホルダー表示 (落ち着いたダークグレー)
+        float grid = (fmod(floor(uv.x * 20.0) + floor(uv.y * 20.0), 2.0) == 0.0) ? 0.08 : 0.03;
+        return float4(grid, grid, grid + 0.02, 1.0);
     }
     
     return videoTexture.sample(textureSampler, sampledUV);
