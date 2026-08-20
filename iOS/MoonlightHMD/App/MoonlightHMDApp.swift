@@ -47,7 +47,7 @@ struct ContentView: View {
             if isStreaming {
                 // VR HMD レンダリング ＆ 6DoF カメラトラッキング画面
                 ZStack(alignment: .topLeading) {
-                    VRRenderViewRepresentable()
+                    VRRenderViewRepresentable(hostIP: targetIP)
                         .edgesIgnoringSafeArea(.all)
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -259,10 +259,16 @@ struct ContentView: View {
 
 // SwiftUI 向け VR Metal ビューブリッジ
 struct VRRenderViewRepresentable: UIViewControllerRepresentable {
+    var hostIP: String
+
     func makeUIViewController(context: Context) -> MoonlightVRViewController {
-        return MoonlightVRViewController()
+        let vc = MoonlightVRViewController()
+        vc.hostIP = hostIP
+        return vc
     }
 
-    func updateUIViewController(_ uiViewController: MoonlightVRViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: MoonlightVRViewController, context: Context) {
+        uiViewController.hostIP = hostIP
+    }
 }
 

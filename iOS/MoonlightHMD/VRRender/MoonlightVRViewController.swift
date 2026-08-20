@@ -100,27 +100,30 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         commandBuffer.commit()
     }
 
+    var hostIP: String = "192.168.0.13"
     private var directStreamTask: URLSessionDataTask?
     private var streamSession: URLSession?
     private var receivedDataBuffer = Data()
+    private var isStreamingActive = false
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        isStreamingActive = true
         startDirectDesktopStream()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        isStreamingActive = false
         stopDirectDesktopStream()
     }
 
     // 🖥️ PC 画面丸ごとダイレクト VR ストリーム受信 (Port 9051)
     func startDirectDesktopStream() {
-        let targetIP = UserDefaults.standard.string(forKey: "pc_target_ip") ?? "192.168.0.13"
-        guard let url = URL(string: "http://\(targetIP):9051") else { return }
+        guard let url = URL(string: "http://\(hostIP):9051") else { return }
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 5.0
+        config.timeoutIntervalForRequest = 3.0
         streamSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
 
         var request = URLRequest(url: url)
