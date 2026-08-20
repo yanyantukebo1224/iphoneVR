@@ -74,71 +74,23 @@ struct ContentView: View {
                         }
 
                         Button(action: toggleStreaming) {
-                            Text("Start VR HMD Mode")
-                                .font(.headline)
-                                .padding()
-                                .frame(width: 240)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
-
-                        // 🔐 Moonlight / Sunshine PINペアリングカード
-                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Image(systemName: "lock.shield.fill")
-                                    .foregroundColor(.cyan)
-                                Text("Moonlight / Sunshine PIN Pairing:")
-                                    .font(.caption)
-                                    .bold()
-                                    .foregroundColor(.white)
-                                Spacer()
-                                Button(action: {
-                                    pairingManager.checkAndPair(hostIP: targetIP)
-                                }) {
-                                    Text("Pair with PC")
-                                        .font(.caption2)
-                                        .bold()
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 4)
-                                        .background(Color.cyan)
-                                        .foregroundColor(.black)
-                                        .cornerRadius(6)
-                                }
+                                Image(systemName: "play.fill")
+                                Text("Start VR HMD Mode")
                             }
-
-                            if case .pairingRequired(let pin) = pairingManager.pairingState {
-                                VStack(alignment: .center, spacing: 4) {
-                                    Text("ENTER THIS PIN ON YOUR PC (SUNSHINE/GFE):")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.yellow)
-                                    Text(pin)
-                                        .font(.system(size: 28, weight: .heavy, design: .monospaced))
-                                        .foregroundColor(.green)
-                                        .padding(.vertical, 4)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .background(Color.black.opacity(0.5))
-                                .cornerRadius(8)
-                            } else if case .paired(let server) = pairingManager.pairingState {
-                                Text("✅ Paired with: \(server)")
-                                    .font(.caption2)
-                                    .foregroundColor(.green)
-                            } else if case .failed(let err) = pairingManager.pairingState {
-                                Text("Status: \(err)")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.orange)
-                            } else {
-                                Text("Tap 'Pair with PC' to generate 4-digit PIN for Sunshine / GeForce Experience")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.gray)
-                            }
+                            .font(.headline)
+                            .padding()
+                            .frame(width: 260)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white.opacity(0.08))
-                        .cornerRadius(10)
-                        .padding(.horizontal)
+
+                        // 💡 簡単ワンタップ接続（Sunshine/Moonlight ペアリング不要）
+                        Text("💡 Simply enter your PC IP and tap Start VR. No pairing required!")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.cyan)
+                            .padding(.vertical, 4)
 
                         // 🎮 Switch / Gamepad 接続ステータスカード
                         VStack(alignment: .leading, spacing: 6) {

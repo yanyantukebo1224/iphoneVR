@@ -103,9 +103,14 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
 
     var hostIP: String = "192.168.0.13"
     private var isStreamingActive = false
-    private var streamSession: URLSession?
-    private var streamTask: URLSessionDataTask?
-    private var receivedBuffer = Data()
+    private var displayLink: CADisplayLink?
+    private var isFetching = false
+    private let fetchSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 0.3
+        cfg.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        return URLSession(configuration: cfg)
+    }()
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -119,81 +124,45 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         stopDirectDesktopStream()
     }
 
-    // 🖥️ 60fps MJPEG リアルタイム連続プッシュストリーム受信 (ゼロポーリング遅延)
+    // 🖥️ ゼロクラッシュ・高耐久リアルタイムデスクトップストリーム受信
     func startDirectDesktopStream() {
-        guard let url = URL(string: "http://\(hostIP):9051/stream.mjpg") else { return }
-        
-        let config = URLSessionConfiguration.ephemeral
-        config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        streamSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue())
-        
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30.0
-        streamTask = streamSession?.dataTask(with: request)
-        streamTask?.resume()
-        print("🚀 Connected to Continuous 60fps PC VR Stream at: \(url)")
+        displayLink = CADisplayLink(target: self, selector: #selector(fetchFrameTick))
+        displayLink?.preferredFramesPerSecond = 60
+        displayLink?.add(to: .main, forMode: .common)
+        print("🚀 Connected to Direct PC Desktop Stream at: http://\(hostIP):9051")
     }
 
     func stopDirectDesktopStream() {
-        streamTask?.cancel()
-        streamTask = nil
-        streamSession?.invalidateAndCancel()
-        streamSession = nil
-        receivedBuffer.removeAll()
+        displayLink?.invalidate()
+        displayLink = nil
+        isFetching = false
     }
 
-    // UIImage から MTLTexture へ超高速ロード
-    func updateTexture(from image: UIImage) {
-        guard let cgImage = image.cgImage else { return }
-        let loader = MTKTextureLoader(device: device)
-        if let texture = try? loader.newTexture(cgImage: cgImage, options: [
-            .SRGB: false,
-            .generateMipmaps: false,
-            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
-        ]) {
-            DispatchQueue.main.async { [weak self] in
-                self?.currentTexture = texture
+    @objc private func fetchFrameTick() {
+        guard isStreamingActive, !isFetching else { return }
+        guard let url = URL(string: "http://\(hostIP):9051/screen.jpg") else { return }
+
+        isFetching = true
+        let task = fetchSession.dataTask(with: url) { [weak self] data, response, error in
+            defer { self?.isFetching = false }
+            guard let self = self, let data = data else { return }
+
+            autoreleasepool {
+                if let image = UIImage(data: data), let cgImage = image.cgImage {
+                    let loader = MTKTextureLoader(device: self.device)
+                    if let texture = try? loader.newTexture(cgImage: cgImage, options: [
+                        .SRGB: false,
+                        .generateMipmaps: false,
+                        .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
+                    ]) {
+                        DispatchQueue.main.async {
+                            self.currentTexture = texture
+                        }
+                    }
+                }
             }
         }
-    }
-}
-
-// 🚀 60fps MJPEG ゼロコピーパーサー (メモリリーク・クラッシュ完全防止)
-extension MoonlightVRViewController: URLSessionDataDelegate {
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard isStreamingActive else { return }
-        receivedBuffer.append(data)
-
-        let soi = Data([0xFF, 0xD8])
-        let eoi = Data([0xFF, 0xD9])
-
-        var latestFrameData: Data? = nil
-
-        autoreleasepool {
-            while let startRange = receivedBuffer.range(of: soi),
-                  let endRange = receivedBuffer.range(of: eoi, in: startRange.upperBound..<receivedBuffer.count) {
-                
-                latestFrameData = receivedBuffer.subdata(in: startRange.lowerBound..<endRange.upperBound)
-                receivedBuffer.removeSubrange(0..<endRange.upperBound)
-            }
-
-            if let frameData = latestFrameData, let image = UIImage(data: frameData) {
-                self.updateTexture(from: image)
-            }
-        }
-
-        // バッファ肥大化防止（常に最新 2MB 以内に抑制）
-        if receivedBuffer.count > 1024 * 1024 * 2 {
-            receivedBuffer.removeAll()
-        }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if isStreamingActive {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.startDirectDesktopStream()
-            }
-        }
+        task.resume()
     }
 }
 
