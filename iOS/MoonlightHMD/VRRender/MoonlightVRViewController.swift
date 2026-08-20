@@ -18,6 +18,11 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         setupPipeline()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        mtkView?.frame = view.bounds
+    }
+
     private func setupMetal() {
         guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
             fatalError("Metal is not supported on this device.")

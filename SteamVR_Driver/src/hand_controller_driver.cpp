@@ -397,11 +397,11 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.vecPosition[1] = effectiveHeadY + worldOffset.v[1];
     m_pose.vecPosition[2] = headPos.z + worldOffset.v[2];
 
-    // Ergonomic forward-pointing grip rotation offset (Pitch forward ~30 deg, slight inward cant)
-    // Eliminates the downward-bent wrist bug in SteamVR / VRChat
-    double pitchAngle = -0.52; // ~-30 degrees forward tilt
-    double yawAngle = isLeft ? 0.12 : -0.12;
-    double rollAngle = isLeft ? 0.14 : -0.14;
+    // Ergonomic forward-pointing grip rotation offset (Pitch forward ~45 deg, inward cant)
+    // Points the controllers and avatar hands naturally forward in player's field of view
+    double pitchAngle = -0.75; // ~-43 degrees forward tilt
+    double yawAngle = isLeft ? 0.08 : -0.08;
+    double rollAngle = isLeft ? 0.10 : -0.10;
 
     double cy = cos(yawAngle * 0.5);
     double sy = sin(yawAngle * 0.5);

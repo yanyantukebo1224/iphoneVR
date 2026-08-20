@@ -38,7 +38,7 @@ vertex VertexOut vrVertexShader(uint vertexID [[vertex_id]]) {
     return out;
 }
 
-// VR レンズ歪み補正シェーダー (Aspect Fill Dual Eye VR)
+// VR レンズ歪み補正シェーダー (Perfect Fullscreen VR Viewport)
 fragment float4 vrDistortionFragmentShader(VertexOut in [[stage_in]],
                                             texture2d<float> videoTexture [[texture(0)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
@@ -52,52 +52,39 @@ fragment float4 vrDistortionFragmentShader(VertexOut in [[stage_in]],
 
     // 左右画面のローカル座標 (0.0 ~ 1.0)
     bool isRightEye = (uv.x >= 0.5);
-    float2 localUV;
-    if (isRightEye) {
-        localUV = float2((uv.x - 0.5) * 2.0, uv.y);
-    } else {
-        localUV = float2(uv.x * 2.0, uv.y);
-    }
+    float2 localUV = isRightEye ? float2((uv.x - 0.5) * 2.0, uv.y) : float2(uv.x * 2.0, uv.y);
 
     // 各眼の中心 (0.5, 0.5)
     float2 eyeCenter = float2(0.5, 0.5);
     float2 delta = localUV - eyeCenter;
 
-    // iPhoneの片目アスペクト比 (~1.08) と映像アスペクト比 (~1.77) の違いを解消する Aspect-Fill 補正
-    // 画面の上下黒帯を完全排除し、全画面いっぱいにVR映像を大迫力展開
-    float2 aspectScale = float2(0.75, 1.0); // 左右の余白を適切に拡大して上下黒帯を消去
-    float2 scaledDelta = delta * aspectScale;
+    // 樽型歪み計算 (穏やかなカーブで視界を最大化)
+    float r2 = dot(delta, delta);
+    float k1 = 0.06;
+    float distortion = 1.0 + k1 * r2;
+    float2 distortedDelta = delta * distortion;
 
-    // 樽型歪み計算
-    float r2 = dot(scaledDelta, scaledDelta);
-    float k1 = 0.08;
-    float k2 = 0.03;
-    float distortion = 1.0 + k1 * r2 + k2 * r2 * r2;
+    // テクスチャのアスペクト比判定
+    float texWidth = float(videoTexture.get_width());
+    float texHeight = max(float(videoTexture.get_height()), 1.0);
+    float texAspect = texWidth / texHeight;
 
-    float2 distortedUV = eyeCenter + delta * distortion;
-
-    // テクスチャのアスペクト比判定 (SBS 3DかMonoフル画面か)
-    float texAspect = float(videoTexture.get_width()) / max(float(videoTexture.get_height()), 1.0);
     float2 sampledUV;
     if (texAspect >= 1.9) {
         // Side-by-Side 3Dモード (左目: 左半分, 右目: 右半分)
         if (isRightEye) {
-            sampledUV = float2(0.5 + distortedUV.x * 0.5, distortedUV.y);
+            sampledUV = float2(0.5 + (eyeCenter.x + distortedDelta.x) * 0.5, eyeCenter.y + distortedDelta.y);
         } else {
-            sampledUV = float2(distortedUV.x * 0.5, distortedUV.y);
+            sampledUV = float2((eyeCenter.x + distortedDelta.x) * 0.5, eyeCenter.y + distortedDelta.y);
         }
     } else {
-        // フル画面複製モード (通常のデスクトップやSteamVR 1画面映像を両眼に美しく全画面表示)
-        // 16:9映像を片目画面(~1.08:1)に中央Aspect-Fillでマッピング
-        float2 fillDelta = delta * float2(0.65, 1.0) * distortion;
-        sampledUV = eyeCenter + fillDelta;
+        // フル画面複製モード (通常のデスクトップやSteamVR 1画面映像を両眼フルスクリーン展開)
+        // 16:9 映像を上下黒帯なしで片目画面にぴったり全画面フィット (Aspect Fill)
+        // Y方向を画面いっぱいに広げ、上下の黒帯を完全に消滅させます
+        sampledUV = eyeCenter + float2(distortedDelta.x * 0.90, distortedDelta.y * 0.90);
     }
 
-    // 枠外クリッピング
-    if (sampledUV.x < 0.0 || sampledUV.x > 1.0 || sampledUV.y < 0.0 || sampledUV.y > 1.0) {
-        return float4(0.0, 0.0, 0.0, 1.0);
-    }
-
-    return videoTexture.sample(textureSampler, sampledUV);
+    // clamp_to_edge でエッジが自然に伸びるようにサンプリング (黒帯なし)
+    return videoTexture.sample(textureSampler, clamp(sampledUV, float2(0.001, 0.001), float2(0.999, 0.999)));
 }
 
