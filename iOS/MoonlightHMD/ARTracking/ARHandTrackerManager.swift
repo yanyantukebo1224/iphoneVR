@@ -81,25 +81,23 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         var newRight: HandPacketData?
 
         if let observations = results, !observations.isEmpty {
-            for observation in observations {
-                // 🖐️ Apple Vision公式の左右判定
-                var determinedChirality: UInt32 = 0
-                if observation.chirality == .right {
-                    determinedChirality = 1
-                } else if observation.chirality == .left {
-                    determinedChirality = 0
-                } else {
-                    if let wrist = try? observation.recognizedPoints(.all)[.wrist] {
-                        determinedChirality = (wrist.location.x <= 0.5) ? 1 : 0
-                    }
+            // 一人称視点での確実な左右判定 (画面右側 = 右手, 画面左側 = 左手)
+            if observations.count >= 2 {
+                let sortedObs = observations.sorted { obs1, obs2 in
+                    let x1 = (try? obs1.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                    let x2 = (try? obs2.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                    return x1 < x2
                 }
-
-                if let handData = extract21Joints(from: observation, chirality: determinedChirality) {
-                    if determinedChirality == 0 {
-                        newLeft = handData
-                    } else {
-                        newRight = handData
-                    }
+                // Xが小さい方 (画面左) = 左手 (0), Xが大きい方 (画面右) = 右手 (1)
+                newLeft = extract21Joints(from: sortedObs[0], chirality: 0)
+                newRight = extract21Joints(from: sortedObs[1], chirality: 1)
+            } else if let singleObs = observations.first {
+                let wristX = (try? singleObs.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                let chirality: UInt32 = (wristX >= 0.5) ? 1 : 0
+                if chirality == 1 {
+                    newRight = extract21Joints(from: singleObs, chirality: 1)
+                } else {
+                    newLeft = extract21Joints(from: singleObs, chirality: 0)
                 }
             }
         }

@@ -81,24 +81,21 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         var newRight: HandPacketData?
 
         if let observations = results, !observations.isEmpty {
-            for observation in observations {
-                var determinedChirality: UInt32 = 0
-                if observation.chirality == .right {
-                    determinedChirality = 1
-                } else if observation.chirality == .left {
-                    determinedChirality = 0
-                } else {
-                    if let wrist = try? observation.recognizedPoints(.all)[.wrist] {
-                        determinedChirality = (wrist.location.x <= 0.5) ? 1 : 0
-                    }
+            if observations.count >= 2 {
+                let sortedObs = observations.sorted { obs1, obs2 in
+                    let x1 = (try? obs1.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                    let x2 = (try? obs2.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                    return x1 < x2
                 }
-
-                if let handData = extract21Joints(from: observation, chirality: determinedChirality) {
-                    if determinedChirality == 0 {
-                        newLeft = handData
-                    } else {
-                        newRight = handData
-                    }
+                newLeft = extract21Joints(from: sortedObs[0], chirality: 0)
+                newRight = extract21Joints(from: sortedObs[1], chirality: 1)
+            } else if let singleObs = observations.first {
+                let wristX = (try? singleObs.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                let chirality: UInt32 = (wristX >= 0.5) ? 1 : 0
+                if chirality == 1 {
+                    newRight = extract21Joints(from: singleObs, chirality: 1)
+                } else {
+                    newLeft = extract21Joints(from: singleObs, chirality: 0)
                 }
             }
         }
