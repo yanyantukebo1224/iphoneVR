@@ -426,13 +426,13 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
             uint32_t mask = handData.controller.buttonMask;
 
             if (isLeft) {
-                // Left hand: X button and Y button
-                btnPrimary = (mask & BTN_A_OR_X) || (mask & BTN_X_OR_PLUS) || (mask & BTN_DPAD_DOWN) || (mask & BTN_DPAD_LEFT);
-                btnSecondary = (mask & BTN_B_OR_Y) || (mask & BTN_Y_OR_MINUS) || (mask & BTN_DPAD_UP) || (mask & BTN_DPAD_RIGHT);
+                // Left hand: X button and Y button (or D-pad)
+                btnPrimary = (mask & BTN_A_OR_X) || (mask & BTN_DPAD_DOWN) || (mask & BTN_DPAD_LEFT);
+                btnSecondary = (mask & BTN_B_OR_Y) || (mask & BTN_DPAD_UP) || (mask & BTN_DPAD_RIGHT);
             } else {
                 // Right hand: A button and B button
-                btnPrimary = (mask & BTN_A_OR_X) || (mask & BTN_X_OR_PLUS) || (mask & BTN_DPAD_DOWN) || (mask & BTN_DPAD_RIGHT);
-                btnSecondary = (mask & BTN_B_OR_Y) || (mask & BTN_Y_OR_MINUS) || (mask & BTN_DPAD_UP) || (mask & BTN_DPAD_LEFT);
+                btnPrimary = (mask & BTN_A_OR_X) || (mask & BTN_DPAD_DOWN) || (mask & BTN_DPAD_RIGHT);
+                btnSecondary = (mask & BTN_B_OR_Y) || (mask & BTN_DPAD_UP) || (mask & BTN_DPAD_LEFT);
             }
 
             trigVal = handData.controller.triggerValue;
@@ -442,7 +442,9 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
             isGripClicked = (mask & BTN_GRIP_CLICK) != 0 || (gripVal > 0.45f);
 
             stickClicked = (mask & BTN_THUMBSTICK_CLICK) != 0;
+            // Plus (+) or Minus (-) triggers SteamVR System (Home) dashboard
             systemClicked = (mask & BTN_SYSTEM) != 0;
+
             stickX = handData.controller.stickX;
             stickY = handData.controller.stickY;
         } else {

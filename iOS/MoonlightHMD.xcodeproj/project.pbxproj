@@ -16,6 +16,7 @@
 		A10000072C12345600000007 /* TrackingProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000072C12345600000007 /* TrackingProtocol.swift */; };
 		A10000082C12345600000008 /* GameControllerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000082C12345600000008 /* GameControllerManager.swift */; };
 		A10000092C12345600000009 /* MoonlightPairingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000092C12345600000009 /* MoonlightPairingManager.swift */; };
+		A100000A2C1234560000000A /* VRSettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000A2C1234560000000A /* VRSettingsManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
 		B10000072C12345600000007 /* TrackingProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrackingProtocol.swift; path = MoonlightHMD/Network/TrackingProtocol.swift; sourceTree = "<group>"; };
 		B10000082C12345600000008 /* GameControllerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GameControllerManager.swift; path = MoonlightHMD/Input/GameControllerManager.swift; sourceTree = "<group>"; };
 		B10000092C12345600000009 /* MoonlightPairingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MoonlightPairingManager.swift; path = MoonlightHMD/Network/MoonlightPairingManager.swift; sourceTree = "<group>"; };
+		B100000A2C1234560000000A /* VRSettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VRSettingsManager.swift; path = MoonlightHMD/ARTracking/VRSettingsManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -41,6 +43,7 @@
 				B10000072C12345600000007 /* TrackingProtocol.swift */,
 				B10000092C12345600000009 /* MoonlightPairingManager.swift */,
 				B10000082C12345600000008 /* GameControllerManager.swift */,
+				B100000A2C1234560000000A /* VRSettingsManager.swift */,
 				B10000042C12345600000004 /* MoonlightVRViewController.swift */,
 				B10000052C12345600000005 /* DistortionShader.metal */,
 				B10000062C12345600000006 /* MoonlightHMDApp.swift */,

@@ -137,7 +137,7 @@ class GameControllerManager: ObservableObject {
             if gamepad.buttonY.isPressed { mask |= ControllerButtonBits.btnYorMinus }
 
             if chirality == 0 {
-                // Left
+                // Left Joy-Con / Left Gamepad
                 if gamepad.leftShoulder.isPressed { mask |= ControllerButtonBits.btnGripClick }
                 if gamepad.leftTrigger.isPressed { mask |= ControllerButtonBits.btnTriggerClick }
                 inputData.triggerValue = Float(gamepad.leftTrigger.value)
@@ -149,7 +149,7 @@ class GameControllerManager: ObservableObject {
                     mask |= ControllerButtonBits.btnThumbstickClick
                 }
             } else {
-                // Right
+                // Right Joy-Con / Right Gamepad
                 if gamepad.rightShoulder.isPressed { mask |= ControllerButtonBits.btnGripClick }
                 if gamepad.rightTrigger.isPressed { mask |= ControllerButtonBits.btnTriggerClick }
                 inputData.triggerValue = Float(gamepad.rightTrigger.value)
@@ -168,34 +168,36 @@ class GameControllerManager: ObservableObject {
             if gamepad.dpad.left.isPressed { mask |= ControllerButtonBits.btnDpadLeft }
             if gamepad.dpad.right.isPressed { mask |= ControllerButtonBits.btnDpadRight }
 
-            // Menu / System
+            // Plus (+) / Minus (-) / Home / Menu / Options -> SteamVR System (Home) ボタン
             if gamepad.buttonMenu.isPressed { mask |= ControllerButtonBits.btnSystem }
             if let opt = gamepad.buttonOptions, opt.isPressed { mask |= ControllerButtonBits.btnSystem }
             if let home = gamepad.buttonHome, home.isPressed { mask |= ControllerButtonBits.btnSystem }
         }
 
-        // 2. PhysicalInputProfile (iOS 14+ 汎用 Switch コントローラー完全対応)
+        // 2. PhysicalInputProfile (iOS 14+ Switch Joy-Con / Pro-Con / 汎用ゲームパッド対応)
         if #available(iOS 14.0, *) {
             let profile = controller.physicalInputProfile
             for (elementName, element) in profile.elements {
                 if let button = element as? GCControllerButtonInput, button.isPressed {
                     let key = elementName.lowercased()
-                    if key.contains("buttona") || key.contains("button south") { mask |= ControllerButtonBits.btnAorX }
-                    if key.contains("buttonb") || key.contains("button east") { mask |= ControllerButtonBits.btnBorY }
-                    if key.contains("buttonx") || key.contains("button west") { mask |= ControllerButtonBits.btnXorPlus }
-                    if key.contains("buttony") || key.contains("button north") { mask |= ControllerButtonBits.btnYorMinus }
-                    if key.contains("trigger") || key.contains("zl") || key.contains("zr") {
+                    
+                    // Home / Plus / Minus / Options / Menu / Capture -> SteamVR System (Home) ボタン
+                    if key.contains("plus") || key.contains("minus") || key.contains("home") || key.contains("capture") || key.contains("menu") || key.contains("options") || key.contains("share") || key.contains("start") || key.contains("select") {
+                        mask |= ControllerButtonBits.btnSystem
+                    }
+                    else if key.contains("buttona") || key.contains("button south") { mask |= ControllerButtonBits.btnAorX }
+                    else if key.contains("buttonb") || key.contains("button east") { mask |= ControllerButtonBits.btnBorY }
+                    else if key.contains("buttonx") || key.contains("button west") { mask |= ControllerButtonBits.btnXorPlus }
+                    else if key.contains("buttony") || key.contains("button north") { mask |= ControllerButtonBits.btnYorMinus }
+                    else if key.contains("trigger") || key.contains("zl") || key.contains("zr") {
                         mask |= ControllerButtonBits.btnTriggerClick
                         inputData.triggerValue = max(inputData.triggerValue, Float(button.value))
                     }
-                    if key.contains("shoulder") || key.contains("button l") || key.contains("button r") || key.contains("sl") || key.contains("sr") {
+                    else if key.contains("shoulder") || key.contains("button l") || key.contains("button r") || key.contains("sl") || key.contains("sr") {
                         mask |= ControllerButtonBits.btnGripClick
                         inputData.gripValue = 1.0
                     }
-                    if key.contains("home") || key.contains("capture") || key.contains("menu") || key.contains("options") || key.contains("minus") || key.contains("plus") || key.contains("share") || key.contains("start") || key.contains("select") {
-                        mask |= ControllerButtonBits.btnSystem
-                    }
-                    if key.contains("thumbstick") || key.contains("stick button") {
+                    else if key.contains("thumbstick") || key.contains("stick button") {
                         mask |= ControllerButtonBits.btnThumbstickClick
                     }
                 } else if let axis = element as? GCControllerAxisInput {
@@ -207,17 +209,6 @@ class GameControllerManager: ObservableObject {
         }
 
         inputData.buttonMask = mask
-
-        if let motion = controller.motion {
-            let attitude = motion.attitude
-            inputData.controllerRot = Quaternionf(
-                w: Float(attitude.w),
-                x: Float(attitude.x),
-                y: Float(attitude.y),
-                z: Float(attitude.z)
-            )
-        }
-
         return inputData
     }
 }

@@ -19,16 +19,29 @@ jobs:
       - name: Build iOS Project (Unsigned / Release)
         run: |
           cd iOS
-          xcodebuild -project Moonlight.xcodeproj \
-            -scheme "Moonlight" \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            -derivedDataPath build \
-            build
+          if [ -d "MoonlightHMD.xcodeproj" ]; then
+            xcodebuild -project MoonlightHMD.xcodeproj \
+              -scheme "MoonlightHMD" \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              -derivedDataPath build \
+              build
+          else
+            xcodebuild -project Moonlight.xcodeproj \
+              -scheme "Moonlight" \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              -derivedDataPath build \
+              build
+          fi
 
       - name: Package IPA
         run: |
