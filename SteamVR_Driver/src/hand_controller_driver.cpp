@@ -120,7 +120,8 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.poseIsValid = true;
     m_pose.deviceIsConnected = true;
     m_pose.result = vr::TrackingResult_Running_OK;
-    m_pose.qWorldFromDriverRotation.w = 1.0;
+    m_pose.qWorldFromDriverRotation = { 1.0, 0.0, 0.0, 0.0 };
+    m_pose.qDriverFromHeadRotation = { 1.0, 0.0, 0.0, 0.0 };
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
@@ -138,11 +139,6 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     if (rawZ != rawZ) rawZ = 0.0f;
 
     auto now = std::chrono::steady_clock::now();
-    float deltaMovement = std::sqrt(
-        (rawX - m_lastPosition[0]) * (rawX - m_lastPosition[0]) +
-        (rawY - m_lastPosition[1]) * (rawY - m_lastPosition[1]) +
-        (rawZ - m_lastPosition[2]) * (rawZ - m_lastPosition[2])
-    );
 
     if (handData.isTracked == 1) {
         m_lastMovementTime = now;
@@ -160,6 +156,8 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
             m_pose.qRotation.x = wRot.x;
             m_pose.qRotation.y = wRot.y;
             m_pose.qRotation.z = wRot.z;
+        } else {
+            m_pose.qRotation = { 1.0, 0.0, 0.0, 0.0 };
         }
     } else {
         auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastMovementTime).count();
@@ -177,10 +175,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
                     m_pose.qRotation.z = cRot.z;
                 }
             } else {
-                m_pose.qRotation.w = 1.0;
-                m_pose.qRotation.x = 0.0;
-                m_pose.qRotation.y = 0.0;
-                m_pose.qRotation.z = 0.0;
+                m_pose.qRotation = { 1.0, 0.0, 0.0, 0.0 };
             }
         }
     }
@@ -532,21 +527,21 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float splayPinky  = handData.splays.pinky;
 
     // VMT Scalar Linear Space: 0.0 (Fist) -> 1.0 (Open Hand)
-    hand.thumb.metacarpal.swing[0] += DEG_TO_RAD(curlThumb * 15.f);
+    hand.thumb.metacarpal.swing[0] += DEG_TO_RAD(curlThumb * 10.f);
     hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 10.f);
-    hand.thumb.proximal.swing[0] += DEG_TO_RAD(curlThumb * 80.f);
-    hand.thumb.proximal.swing[1] += DEG_TO_RAD(splayThumb * 15.f);
-    hand.thumb.distal.rotation += DEG_TO_RAD(curlThumb * 80.f);
+    hand.thumb.proximal.swing[0] = DEG_TO_RAD(curlThumb * 45.f);
+    hand.thumb.proximal.swing[1] = DEG_TO_RAD((1.0f - curlThumb) * 35.f + curlThumb * 10.f + splayThumb * 10.f);
+    hand.thumb.distal.rotation = DEG_TO_RAD(curlThumb * 50.f);
 
     float curls[4] = { curlIndex, curlMiddle, curlRing, curlPinky };
     float splays[4] = { splayIndex, splayMiddle, splayRing, splayPinky };
 
     for (int i = 0; i < 4; ++i) {
         hand.fingers[i].metacarpal.swing[0] += DEG_TO_RAD(curls[i] * 5.f);
-        hand.fingers[i].proximal.swing[0] += DEG_TO_RAD(curls[i] * 80.f);
+        hand.fingers[i].proximal.swing[0] = DEG_TO_RAD(curls[i] * 75.f);
         hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 10.f);
-        hand.fingers[i].intermediate.rotation += DEG_TO_RAD(curls[i] * 80.f);
-        hand.fingers[i].distal.rotation += DEG_TO_RAD(curls[i] * 70.f);
+        hand.fingers[i].intermediate.rotation = DEG_TO_RAD(curls[i] * 75.f);
+        hand.fingers[i].distal.rotation = DEG_TO_RAD(curls[i] * 65.f);
     }
 
     ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.thumb.metacarpal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][0], outBones[eBone_Thumb0]);
