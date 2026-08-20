@@ -9,12 +9,13 @@ add_library(driver_iphonevr SHARED
     src/hmd_device_driver.cpp
     src/hand_controller_driver.cpp
     src/udp_receiver.cpp
+    src/screen_streamer.cpp
 )
 
 target_include_directories(driver_iphonevr PRIVATE src)
 
 if(WIN32)
-    target_link_libraries(driver_iphonevr PRIVATE ws2_32)
+    target_link_libraries(driver_iphonevr PRIVATE ws2_32 gdiplus)
     set_target_properties(driver_iphonevr PROPERTIES
         OUTPUT_NAME "driver_iphonevr"
         PREFIX ""

@@ -82,10 +82,17 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         if let observations = results, !observations.isEmpty {
             for observation in observations {
-                guard let recognizedPoints = try? observation.recognizedPoints(.all),
-                      let wrist = recognizedPoints[.wrist] else { continue }
-
-                let determinedChirality: UInt8 = (wrist.location.x <= 0.5) ? 0 : 1
+                // 🖐️ Apple Vision公式の生体力学的左右手判定 (親指・小指の骨格幾何)
+                var determinedChirality: UInt8 = 0
+                if observation.chirality == .right {
+                    determinedChirality = 1
+                } else if observation.chirality == .left {
+                    determinedChirality = 0
+                } else {
+                    if let wrist = try? observation.recognizedPoints(.all)[.wrist] {
+                        determinedChirality = (wrist.location.x <= 0.5) ? 0 : 1
+                    }
+                }
 
                 if let handData = extract21Joints(from: observation, chirality: determinedChirality, frame: frame) {
                     if determinedChirality == 0 {

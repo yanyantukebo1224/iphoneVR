@@ -47,6 +47,7 @@ private:
     vr::VRInputComponentHandle_t m_ulSystemButtonComponent;
 
     bool m_isTracked;
+    bool m_lastSystemClicked = false;
 
     std::chrono::steady_clock::time_point m_lastMovementTime;
     float m_lastPosition[3];

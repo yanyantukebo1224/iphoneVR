@@ -255,7 +255,10 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         }
 
         if (m_ulSystemButtonComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulSystemButtonComponent, systemClicked, 0);
+            if (systemClicked != m_lastSystemClicked) {
+                m_lastSystemClicked = systemClicked;
+                vr::VRDriverInput()->UpdateBooleanComponent(m_ulSystemButtonComponent, systemClicked, 0);
+            }
         }
 
         vr::VRBoneTransform_t bones[31];

@@ -2,6 +2,7 @@
 #include "hmd_device_driver.h"
 #include "hand_controller_driver.h"
 #include "udp_receiver.h"
+#include "screen_streamer.h"
 #include <iostream>
 #include <memory>
 #include <cstring>
@@ -9,7 +10,7 @@
 class ServerTrackedDeviceProvider : public vr::IServerTrackedDeviceProvider {
 public:
     ServerTrackedDeviceProvider()
-        : m_pHmdDriver(nullptr), m_pLeftHandDriver(nullptr), m_pRightHandDriver(nullptr), m_pUdpReceiver(nullptr) {}
+        : m_pHmdDriver(nullptr), m_pLeftHandDriver(nullptr), m_pRightHandDriver(nullptr), m_pUdpReceiver(nullptr), m_pScreenStreamer(nullptr) {}
     virtual ~ServerTrackedDeviceProvider() {}
 
     virtual vr::EVRInitError Init(vr::IVRDriverContext* pDriverContext) override {
@@ -38,10 +39,19 @@ public:
             }
         });
 
+        // 🖥️ PC画面丸ごと iPhone VR 直接配信サーバー起動 (Port 9051)
+        m_pScreenStreamer = new ScreenStreamer();
+        m_pScreenStreamer->Start(9051);
+
         return vr::VRInitError_None;
     }
 
     virtual void Cleanup() override {
+        if (m_pScreenStreamer) {
+            m_pScreenStreamer->Stop();
+            delete m_pScreenStreamer;
+            m_pScreenStreamer = nullptr;
+        }
         if (m_pUdpReceiver) {
             m_pUdpReceiver->Stop();
             delete m_pUdpReceiver;
@@ -76,6 +86,7 @@ private:
     HandControllerDriver* m_pLeftHandDriver;
     HandControllerDriver* m_pRightHandDriver;
     UDPReceiver* m_pUdpReceiver;
+    ScreenStreamer* m_pScreenStreamer;
 };
 
 static ServerTrackedDeviceProvider g_serverTrackedDeviceProvider;
