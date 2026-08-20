@@ -36,16 +36,16 @@ class BinaryUDPStreamer {
         var ry = headRot.imag.y
         var rz = headRot.imag.z
 
-        data.append(UnsafeBufferPointer(start: &magic, count: 1))
-        data.append(UnsafeBufferPointer(start: &seq, count: 1))
-        data.append(UnsafeBufferPointer(start: &ts, count: 1))
-        data.append(UnsafeBufferPointer(start: &hx, count: 1))
-        data.append(UnsafeBufferPointer(start: &hy, count: 1))
-        data.append(UnsafeBufferPointer(start: &hz, count: 1))
-        data.append(UnsafeBufferPointer(start: &rw, count: 1))
-        data.append(UnsafeBufferPointer(start: &rx, count: 1))
-        data.append(UnsafeBufferPointer(start: &ry, count: 1))
-        data.append(UnsafeBufferPointer(start: &rz, count: 1))
+        withUnsafeBytes(of: &magic) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &seq) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &ts) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &hx) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &hy) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &hz) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &rw) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &rx) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &ry) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &rz) { data.append(contentsOf: $0) }
 
         // 2. 左右の手データ (0: 左手, 1: 右手)
         appendHandData(hand: leftHand, defaultChirality: 0, to: &data)
@@ -68,12 +68,12 @@ class BinaryUDPStreamer {
         var curls = hand?.curls ?? FingerCurls()
         var splays = hand?.splays ?? FingerSplays()
 
-        data.append(UnsafeBufferPointer(start: &chirality, count: 1))
-        data.append(UnsafeBufferPointer(start: &isTracked, count: 1))
-        data.append(UnsafeBufferPointer(start: &isPinching, count: 1))
-        data.append(UnsafeBufferPointer(start: &pinchDist, count: 1))
-        data.append(UnsafeBufferPointer(start: &curls, count: 1))
-        data.append(UnsafeBufferPointer(start: &splays, count: 1))
+        withUnsafeBytes(of: &chirality) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &isTracked) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &isPinching) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &pinchDist) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &curls) { data.append(contentsOf: $0) }
+        withUnsafeBytes(of: &splays) { data.append(contentsOf: $0) }
 
         var dummyBone = BoneTransform(
             position: Vector3f(x: 0, y: 0, z: 0),
@@ -81,17 +81,15 @@ class BinaryUDPStreamer {
         )
 
         if let hand = hand {
-            withUnsafeBytes(of: hand.joints) { rawPtr in
-                data.append(rawPtr.bindMemory(to: UInt8.self))
-            }
+            withUnsafeBytes(of: hand.joints) { data.append(contentsOf: $0) }
         } else {
             for _ in 0..<21 {
-                data.append(UnsafeBufferPointer(start: &dummyBone, count: 1))
+                withUnsafeBytes(of: &dummyBone) { data.append(contentsOf: $0) }
             }
         }
 
         var controller = hand?.controller ?? ControllerInputData()
-        data.append(UnsafeBufferPointer(start: &controller, count: 1))
+        withUnsafeBytes(of: &controller) { data.append(contentsOf: $0) }
     }
 
     func stop() {

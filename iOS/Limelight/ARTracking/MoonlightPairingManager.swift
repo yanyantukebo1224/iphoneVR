@@ -94,7 +94,7 @@ class MoonlightPairingManager: ObservableObject {
             guard let self = self else { return }
 
             DispatchQueue.main.async {
-                if let error = error {
+                if error != nil {
                     // Sunshine側でユーザーがPIN承認したかのポーリングまたは完了
                     self.pairingState = .paired(serverName: "Host PC (PIN Verified)")
                     self.isPairingSuccessful = true
