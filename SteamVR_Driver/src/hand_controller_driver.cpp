@@ -431,20 +431,24 @@ static void ComputeBoneTransform(const vr::ETrackedControllerRole role, const vr
     ComputeBoneTransform(role, orientation, pos, out_transform);
 }
 
-static inline vr::HmdQuaternion_t QuatFromEulerRad(float pitch, float yaw, float roll) {
-    float cp = std::cos(pitch * 0.5f);
-    float sp = std::sin(pitch * 0.5f);
-    float cy = std::cos(yaw * 0.5f);
-    float sy = std::sin(yaw * 0.5f);
-    float cr = std::cos(roll * 0.5f);
-    float sr = std::sin(roll * 0.5f);
+static void ComputeBoneTransformMetacarpal(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const float joint_length, vr::VRBoneTransform_t& out_transform) {
+    const vr::HmdVector3_t offset = { joint_length, 0.f, 0.f };
+    vr::HmdQuaternion_t magic = { 0.5, 0.5, -0.5, 0.5 };
+    vr::HmdQuaternion_t bone_orientation = QuatMultiply(magic, orientation);
+    vr::HmdVector3_t bone_position = QuatRotateVec(offset, bone_orientation);
 
-    return {
-        (double)(cr * cp * cy + sr * sp * sy),
-        (double)(sr * cp * cy - cr * sp * sy),
-        (double)(cr * sp * cy + sr * cp * sy),
-        (double)(cr * cp * sy - sr * sp * cy)
-    };
+    if (role == vr::TrackedControllerRole_RightHand) {
+        std::swap(bone_orientation.w, bone_orientation.x);
+        std::swap(bone_orientation.y, bone_orientation.z);
+        bone_orientation.x *= -1.f;
+        bone_orientation.z *= -1.f;
+    }
+
+    ComputeBoneTransform(role, bone_orientation, bone_position, out_transform);
+}
+
+static int CalculateBoneTransformPositionFromFinger(int finger, int bone_in_finger) {
+    return eBone_IndexFinger0 + finger * 5 + bone_in_finger;
 }
 
 void HandControllerDriver::ConvertVision21ToSteamVR31(
@@ -452,75 +456,81 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     vr::VRBoneTransform_t outBones[31],
     vr::ETrackedControllerRole role
 ) {
-    bool isRight = (role == vr::TrackedControllerRole_RightHand);
-    float sign = isRight ? 1.0f : -1.0f;
+    HandSimHand hand{};
+    hand.role = role;
 
-    // Root (Bone 0)
     outBones[eBone_Root] = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } };
+    outBones[eBone_Wrist] = { { -0.034038f, 0.036503f, 0.164722f, 1.0f }, { -0.055147f, -0.078608f, -0.920279f, 0.379296f } };
 
-    // Wrist (Bone 1)
-    float wX = handData.joints[VISION_JOINT_WRIST].orientation.x;
-    float wY = handData.joints[VISION_JOINT_WRIST].orientation.y;
-    float wZ = handData.joints[VISION_JOINT_WRIST].orientation.z;
-    float wW = handData.joints[VISION_JOINT_WRIST].orientation.w;
-    if (wW == 0.0f && wX == 0.0f && wY == 0.0f && wZ == 0.0f) wW = 1.0f;
+    if (role == vr::TrackedControllerRole_RightHand) {
+        outBones[eBone_Wrist].position.v[0] *= -1.f;
+        outBones[eBone_Wrist].orientation.y *= -1.f;
+        outBones[eBone_Wrist].orientation.z *= -1.f;
+    }
 
-    outBones[eBone_Wrist].position = { 0.0f, 0.0f, 0.0f, 1.0f };
-    outBones[eBone_Wrist].orientation = { wW, wX, wY, wZ };
+    for (auto& finger : hand.fingers) {
+        finger.proximal.swing[1] = DEG_TO_RAD(10.f);
+        finger.intermediate.rotation = DEG_TO_RAD(5.f);
+        finger.distal.rotation = DEG_TO_RAD(5.f);
+    }
 
-    // Curls: 0.0 (open) to 1.0 (closed)
+    hand.thumb.metacarpal.swing[0] = DEG_TO_RAD(10.f);
+    hand.thumb.metacarpal.swing[1] = DEG_TO_RAD(40.f);
+    hand.thumb.metacarpal.twist = DEG_TO_RAD(70.f);
+
+    hand.fingers[0].metacarpal.swing[1] = DEG_TO_RAD(13.f);
+    hand.fingers[1].metacarpal.swing[1] = DEG_TO_RAD(0.f);
+    hand.fingers[2].metacarpal.swing[1] = DEG_TO_RAD(-15.f);
+    hand.fingers[3].metacarpal.swing[1] = DEG_TO_RAD(-27.f);
+
     float curlThumb  = std::clamp(handData.curls.thumb, 0.0f, 1.0f);
     float curlIndex  = std::clamp(handData.curls.index, 0.0f, 1.0f);
     float curlMiddle = std::clamp(handData.curls.middle, 0.0f, 1.0f);
     float curlRing   = std::clamp(handData.curls.ring, 0.0f, 1.0f);
     float curlPinky  = std::clamp(handData.curls.pinky, 0.0f, 1.0f);
 
-    float curls[5] = { curlThumb, curlIndex, curlMiddle, curlRing, curlPinky };
+    float splayThumb  = handData.splays.thumb;
+    float splayIndex  = handData.splays.index;
+    float splayMiddle = handData.splays.middle;
+    float splayRing   = handData.splays.ring;
+    float splayPinky  = handData.splays.pinky;
 
-    // Finger Base Offsets relative to Wrist
-    const float fingerBaseOffsets[5][3] = {
-        { sign * 0.035f, -0.015f, -0.030f }, // Thumb
-        { sign * 0.025f,  0.035f, -0.065f }, // Index
-        { sign * 0.008f,  0.038f, -0.070f }, // Middle
-        { sign * -0.010f, 0.035f, -0.065f }, // Ring
-        { sign * -0.026f, 0.030f, -0.055f }  // Pinky
-    };
+    hand.thumb.metacarpal.swing[0] += DEG_TO_RAD(curlThumb * 5.f);
+    hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 5.f);
+    hand.thumb.proximal.swing[0] += DEG_TO_RAD(curlThumb * 70.f);
+    hand.thumb.proximal.swing[1] += DEG_TO_RAD(splayThumb * 15.f);
+    hand.thumb.distal.rotation += DEG_TO_RAD(curlThumb * 70.f);
 
-    // 1. Thumb (Bones 2-5)
-    vr::HmdQuaternion_t qThumb0 = QuatFromEulerRad(0.2f + curlThumb * 0.4f, sign * (0.3f + curlThumb * 0.4f), 0.0f);
-    vr::HmdQuaternion_t qThumb1 = QuatFromEulerRad(curlThumb * 0.8f, 0.0f, 0.0f);
-    vr::HmdQuaternion_t qThumb2 = QuatFromEulerRad(curlThumb * 0.8f, 0.0f, 0.0f);
+    float curls[4] = { curlIndex, curlMiddle, curlRing, curlPinky };
+    float splays[4] = { splayIndex, splayMiddle, splayRing, splayPinky };
 
-    outBones[eBone_Thumb0] = { { fingerBaseOffsets[0][0], fingerBaseOffsets[0][1], fingerBaseOffsets[0][2], 1.0f }, { (float)qThumb0.w, (float)qThumb0.x, (float)qThumb0.y, (float)qThumb0.z } };
-    outBones[eBone_Thumb1] = { { 0.0f, 0.0f, -0.040f, 1.0f }, { (float)qThumb1.w, (float)qThumb1.x, (float)qThumb1.y, (float)qThumb1.z } };
-    outBones[eBone_Thumb2] = { { 0.0f, 0.0f, -0.035f, 1.0f }, { (float)qThumb2.w, (float)qThumb2.x, (float)qThumb2.y, (float)qThumb2.z } };
-    outBones[eBone_Thumb3] = { { 0.0f, 0.0f, -0.025f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } };
+    for (int i = 0; i < 4; ++i) {
+        hand.fingers[i].metacarpal.swing[0] += DEG_TO_RAD(curls[i] * 5.f);
+        hand.fingers[i].proximal.swing[0] += DEG_TO_RAD(curls[i] * 75.f);
+        hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 10.f);
+        hand.fingers[i].intermediate.rotation += DEG_TO_RAD(curls[i] * 70.f);
+        hand.fingers[i].distal.rotation += DEG_TO_RAD(curls[i] * 65.f);
+    }
 
-    // 2. 4 Fingers (Index, Middle, Ring, Pinky)
-    for (int f = 0; f < 4; ++f) {
-        int fingerIndex = f + 1;
-        int baseBoneIdx = eBone_IndexFinger0 + f * 5;
-        float curl = curls[fingerIndex];
+    ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.thumb.metacarpal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][0], outBones[eBone_Thumb0]);
+    ComputeBoneTransform(role, QuatFromSwingTwist(hand.thumb.proximal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][1], outBones[eBone_Thumb1]);
+    ComputeBoneTransform(role, QuatFromEuler(hand.thumb.distal.rotation, 0.f, 0.f), finger_joint_lengths[0][2], outBones[eBone_Thumb2]);
+    ComputeBoneTransform(role, { 1.f, 0.f, 0.f, 0.f }, finger_joint_lengths[0][3], outBones[eBone_Thumb3]);
 
-        float pitch0 = curl * 0.1f;
-        float pitch1 = curl * 1.35f; // MP joint
-        float pitch2 = curl * 1.20f; // PIP joint
-        float pitch3 = curl * 0.90f; // DIP joint
+    for (int finger = 0; finger < 4; finger++) {
+        ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.fingers[finger].metacarpal.swing, hand.fingers[finger].metacarpal.twist),
+            finger_joint_lengths[finger + 1][0], outBones[CalculateBoneTransformPositionFromFinger(finger, 0)]);
 
-        vr::HmdQuaternion_t q0 = QuatFromEulerRad(pitch0, 0.0f, 0.0f);
-        vr::HmdQuaternion_t q1 = QuatFromEulerRad(pitch1, 0.0f, 0.0f);
-        vr::HmdQuaternion_t q2 = QuatFromEulerRad(pitch2, 0.0f, 0.0f);
-        vr::HmdQuaternion_t q3 = QuatFromEulerRad(pitch3, 0.0f, 0.0f);
+        ComputeBoneTransform(role, QuatFromSwingTwist(hand.fingers[finger].proximal.swing, hand.fingers[finger].proximal.twist), finger_joint_lengths[finger + 1][1],
+            outBones[CalculateBoneTransformPositionFromFinger(finger, 1)]);
 
-        float len1 = finger_joint_lengths[fingerIndex][1];
-        float len2 = finger_joint_lengths[fingerIndex][2];
-        float len3 = finger_joint_lengths[fingerIndex][3];
+        ComputeBoneTransform(role, QuatFromEuler(hand.fingers[finger].intermediate.rotation, 0.f, 0.f), finger_joint_lengths[finger + 1][2],
+            outBones[CalculateBoneTransformPositionFromFinger(finger, 2)]);
 
-        outBones[baseBoneIdx + 0] = { { fingerBaseOffsets[fingerIndex][0], fingerBaseOffsets[fingerIndex][1], fingerBaseOffsets[fingerIndex][2], 1.0f }, { (float)q0.w, (float)q0.x, (float)q0.y, (float)q0.z } };
-        outBones[baseBoneIdx + 1] = { { 0.0f, 0.0f, -len1, 1.0f }, { (float)q1.w, (float)q1.x, (float)q1.y, (float)q1.z } };
-        outBones[baseBoneIdx + 2] = { { 0.0f, 0.0f, -len2, 1.0f }, { (float)q2.w, (float)q2.x, (float)q2.y, (float)q2.z } };
-        outBones[baseBoneIdx + 3] = { { 0.0f, 0.0f, -len3, 1.0f }, { (float)q3.w, (float)q3.x, (float)q3.y, (float)q3.z } };
-        outBones[baseBoneIdx + 4] = { { 0.0f, 0.0f, -0.015f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } };
+        ComputeBoneTransform(role, QuatFromEuler(hand.fingers[finger].distal.rotation, 0.f, 0.f), finger_joint_lengths[finger + 1][3],
+            outBones[CalculateBoneTransformPositionFromFinger(finger, 3)]);
+
+        ComputeBoneTransform(role, { 1.f, 0.f, 0.f, 0.f }, finger_joint_lengths[finger + 1][4], outBones[CalculateBoneTransformPositionFromFinger(finger, 4)]);
     }
 
     outBones[eBone_Aux_Thumb] = outBones[eBone_Thumb3];
