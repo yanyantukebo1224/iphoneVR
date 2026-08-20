@@ -37,47 +37,37 @@ class MoonlightPairingManager: ObservableObject {
 
     func checkAndPair(hostIP: String) {
         let pin = generatePin()
-        self.pairingState = .checkingServer
+        // ボタンを押した瞬間に即座にPINコードを画面上に表示！
+        DispatchQueue.main.async {
+            self.pairingState = .pairingRequired(pin: pin)
+        }
         self.isPairingSuccessful = false
 
         guard let url = URL(string: "http://\(hostIP):47989/serverinfo?uniqueid=0123456789ABCDEF") else {
-            self.pairingState = .failed(error: "Invalid Host IP format")
+            DispatchQueue.main.async {
+                self.pairingState = .pairingRequired(pin: pin) // PINは維持
+            }
             return
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 4.0
+        request.timeoutInterval = 3.0
 
         let task = session.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
 
-            if let error = error {
+            if let data = data, let xmlString = String(data: data, encoding: .utf8) {
                 DispatchQueue.main.async {
-                    // sunshine/GFE が応答しない場合でもVR単体トラッキング動作を許容
-                    self.pairingState = .failed(error: "Cannot connect to Sunshine/GFE: \(error.localizedDescription)")
+                    if xmlString.contains("<PairStatus>1</PairStatus>") {
+                        let hostname = self.extractTagValue(from: xmlString, tag: "hostname") ?? "Host PC"
+                        self.pairingState = .paired(serverName: hostname)
+                        self.isPairingSuccessful = true
+                        return
+                    }
                 }
-                return
             }
 
-            guard let data = data, let xmlString = String(data: data, encoding: .utf8) else {
-                DispatchQueue.main.async {
-                    self.pairingState = .failed(error: "Invalid server response")
-                }
-                return
-            }
-
-            DispatchQueue.main.async {
-                if xmlString.contains("<PairStatus>1</PairStatus>") {
-                    // すでにペアリング済み
-                    let hostname = self.extractTagValue(from: xmlString, tag: "hostname") ?? "Host PC"
-                    self.pairingState = .paired(serverName: hostname)
-                    self.isPairingSuccessful = true
-                } else {
-                    // 未ペアリング ➔ PINコードを表示してペアリング待機
-                    self.pairingState = .pairingRequired(pin: pin)
-                    self.sendPairRequest(hostIP: hostIP, pin: pin)
-                }
-            }
+            self.sendPairRequest(hostIP: hostIP, pin: pin)
         }
         task.resume()
     }
@@ -88,17 +78,13 @@ class MoonlightPairingManager: ObservableObject {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 30.0
+        request.timeoutInterval = 20.0
 
         let task = session.dataTask(with: request) { [weak self] data, response, error in
             guard let self = self else { return }
 
             DispatchQueue.main.async {
-                if error != nil {
-                    // Sunshine側でユーザーがPIN承認したかのポーリングまたは完了
-                    self.pairingState = .paired(serverName: "Host PC (PIN Verified)")
-                    self.isPairingSuccessful = true
-                } else {
+                if let data = data, let xml = String(data: data, encoding: .utf8), xml.contains("<paired>1</paired>") {
                     self.pairingState = .paired(serverName: "Sunshine / GFE Host")
                     self.isPairingSuccessful = true
                 }

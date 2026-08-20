@@ -6,6 +6,7 @@ struct MoonlightHMDApp: App {
     @StateObject private var trackerManager = ARHandTrackerManager()
     @StateObject private var gestureProcessor = HandGestureProcessor()
     @StateObject private var controllerManager = GameControllerManager.shared
+    @StateObject private var pairingManager = MoonlightPairingManager.shared
     private let streamer = BinaryUDPStreamer()
 
     @AppStorage("pc_target_ip") private var pcTargetIP: String = "192.168.0.13"
@@ -21,6 +22,7 @@ struct MoonlightHMDApp: App {
                 trackerManager: trackerManager,
                 gestureProcessor: gestureProcessor,
                 controllerManager: controllerManager,
+                pairingManager: pairingManager,
                 streamer: streamer,
                 targetIP: $pcTargetIP
             )
@@ -32,6 +34,7 @@ struct ContentView: View {
     @ObservedObject var trackerManager: ARHandTrackerManager
     @ObservedObject var gestureProcessor: HandGestureProcessor
     @ObservedObject var controllerManager: GameControllerManager
+    @ObservedObject var pairingManager: MoonlightPairingManager
     let streamer: BinaryUDPStreamer
     @Binding var targetIP: String
 
@@ -127,7 +130,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                 Spacer()
                                 Button(action: {
-                                    MoonlightPairingManager.shared.checkAndPair(hostIP: targetIP)
+                                    pairingManager.checkAndPair(hostIP: targetIP)
                                 }) {
                                     Text("Pair with PC")
                                         .font(.caption2)
@@ -140,7 +143,7 @@ struct ContentView: View {
                                 }
                             }
 
-                            if case .pairingRequired(let pin) = MoonlightPairingManager.shared.pairingState {
+                            if case .pairingRequired(let pin) = pairingManager.pairingState {
                                 VStack(alignment: .center, spacing: 4) {
                                     Text("ENTER THIS PIN ON YOUR PC (SUNSHINE/GFE):")
                                         .font(.system(size: 10, weight: .bold))
@@ -153,11 +156,11 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity)
                                 .background(Color.black.opacity(0.5))
                                 .cornerRadius(8)
-                            } else if case .paired(let server) = MoonlightPairingManager.shared.pairingState {
+                            } else if case .paired(let server) = pairingManager.pairingState {
                                 Text("✅ Paired with: \(server)")
                                     .font(.caption2)
                                     .foregroundColor(.green)
-                            } else if case .failed(let err) = MoonlightPairingManager.shared.pairingState {
+                            } else if case .failed(let err) = pairingManager.pairingState {
                                 Text("Status: \(err)")
                                     .font(.system(size: 9))
                                     .foregroundColor(.orange)

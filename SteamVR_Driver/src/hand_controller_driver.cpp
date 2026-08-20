@@ -192,30 +192,35 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         float stickX = 0.0f;
         float stickY = 0.0f;
 
+        bool isPinchingActive = (handData.isPinching == 1);
+        float cameraTrigVal = isPinchingActive ? 1.0f : handData.curls.index;
+        float cameraGripVal = (handData.curls.middle + handData.curls.ring + handData.curls.pinky) / 3.0f;
+
         if (handData.controller.isConnected == 1) {
             uint32_t mask = handData.controller.buttonMask;
             btnAorX = (mask & BTN_A_OR_X) != 0;
             btnBorY = (mask & BTN_B_OR_Y) != 0;
-            isTriggerClicked = (mask & BTN_TRIGGER_CLICK) != 0 || (handData.controller.triggerValue > 0.5f);
-            trigVal = handData.controller.triggerValue;
-            if (isTriggerClicked && trigVal < 0.1f) trigVal = 1.0f;
 
-            isGripClicked = (mask & BTN_GRIP_CLICK) != 0 || (handData.controller.gripValue > 0.5f);
-            gripVal = handData.controller.gripValue;
-            if (isGripClicked && gripVal < 0.1f) gripVal = 1.0f;
+            // Physical controller + Camera finger tracking simultaneous merge
+            float physTrig = handData.controller.triggerValue;
+            bool physTrigClick = (mask & BTN_TRIGGER_CLICK) != 0 || (physTrig > 0.5f);
+            isTriggerClicked = physTrigClick || isPinchingActive || (cameraTrigVal > 0.65f);
+            trigVal = physTrigClick ? 1.0f : ((physTrig > cameraTrigVal) ? physTrig : cameraTrigVal);
+
+            float physGrip = handData.controller.gripValue;
+            bool physGripClick = (mask & BTN_GRIP_CLICK) != 0 || (physGrip > 0.5f);
+            isGripClicked = physGripClick || (cameraGripVal > 0.70f);
+            gripVal = physGripClick ? 1.0f : ((physGrip > cameraGripVal) ? physGrip : cameraGripVal);
 
             stickClicked = (mask & BTN_THUMBSTICK_CLICK) != 0;
             systemClicked = (mask & BTN_SYSTEM) != 0;
             stickX = handData.controller.stickX;
             stickY = handData.controller.stickY;
         } else {
-            bool isPinchingActive = (handData.isPinching == 1);
-            isTriggerClicked = isPinchingActive || (handData.curls.index > 0.65f);
-            trigVal = isPinchingActive ? 1.0f : handData.curls.index;
-
-            float avgGripCurl = (handData.curls.middle + handData.curls.ring + handData.curls.pinky) / 3.0f;
-            isGripClicked = (avgGripCurl > 0.70f);
-            gripVal = avgGripCurl;
+            isTriggerClicked = isPinchingActive || (cameraTrigVal > 0.65f);
+            trigVal = cameraTrigVal;
+            isGripClicked = (cameraGripVal > 0.70f);
+            gripVal = cameraGripVal;
         }
 
         if (m_ulTriggerClickComponent != vr::k_ulInvalidInputComponentHandle) {

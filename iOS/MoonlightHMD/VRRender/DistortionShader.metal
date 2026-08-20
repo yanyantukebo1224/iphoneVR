@@ -1,8 +1,8 @@
 #include <metal_stdlib>
 using namespace metal;
 
-struct VertexIn {
-    float4 position [[attribute(0)]];
+struct VertexInput {
+    float2 position [[attribute(0)]];
     float2 texCoord [[attribute(1)]];
 };
 
@@ -11,10 +11,37 @@ struct VertexOut {
     float2 texCoord;
 };
 
+// フルスクリーン頂点シェーダー
+vertex VertexOut vrVertexShader(uint vertexID [[vertex_id]]) {
+    // 2枚の三角形でフルスクリーンクアッド (6頂点)
+    const float2 positions[6] = {
+        float2(-1.0, -1.0),
+        float2( 1.0, -1.0),
+        float2(-1.0,  1.0),
+        float2(-1.0,  1.0),
+        float2( 1.0, -1.0),
+        float2( 1.0,  1.0)
+    };
+
+    const float2 texCoords[6] = {
+        float2(0.0, 1.0),
+        float2(1.0, 1.0),
+        float2(0.0, 0.0),
+        float2(0.0, 0.0),
+        float2(1.0, 1.0),
+        float2(1.0, 0.0)
+    };
+
+    VertexOut out;
+    out.position = float4(positions[vertexID], 0.0, 1.0);
+    out.texCoord = texCoords[vertexID];
+    return out;
+}
+
 // VR レンズ歪み補正シェーダー (Side-by-Side)
 fragment float4 vrDistortionFragmentShader(VertexOut in [[stage_in]],
-                                            texture2d<float> videoTexture [[texture(0)]],
-                                            sampler textureSampler [[sampler(0)]]) {
+                                            texture2d<float> videoTexture [[texture(0)]]) {
+    constexpr sampler textureSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 uv = in.texCoord;
     
     // 左右画面判定 (Left Eye: 0.0~0.5, Right Eye: 0.5~1.0)
@@ -39,5 +66,12 @@ fragment float4 vrDistortionFragmentShader(VertexOut in [[stage_in]],
         return float4(0.0, 0.0, 0.0, 1.0);
     }
     
+    if (is_null_texture(videoTexture)) {
+        // テクスチャ未接続時の立体視グリッドプレースホルダー表示
+        float grid = (fmod(floor(uv.x * 20.0) + floor(uv.y * 20.0), 2.0) == 0.0) ? 0.15 : 0.05;
+        return float4(0.0, grid, isRightEye ? 0.3 : 0.2, 1.0);
+    }
+    
     return videoTexture.sample(textureSampler, sampledUV);
 }
+

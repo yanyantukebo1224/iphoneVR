@@ -22,6 +22,15 @@
     <true/>
     <key>NSCameraUsageDescription</key>
     <string>ARKit 6DoF &amp; Hand Tracking requires camera access.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>iPhoneVR requires local network access to stream VR video and tracking data with your PC.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
     <key>UISupportedInterfaceOrientations</key>

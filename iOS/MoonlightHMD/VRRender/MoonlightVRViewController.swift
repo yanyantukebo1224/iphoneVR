@@ -35,10 +35,15 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
     }
 
     private func setupPipeline() {
-        guard let defaultLibrary = device.makeDefaultLibrary() else { return }
+        guard let defaultLibrary = device.makeDefaultLibrary() else {
+            print("Failed to load default Metal library")
+            return
+        }
+        let vertexProgram = defaultLibrary.makeFunction(name: "vrVertexShader")
         let fragmentProgram = defaultLibrary.makeFunction(name: "vrDistortionFragmentShader")
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexFunction = vertexProgram
         pipelineDescriptor.fragmentFunction = fragmentProgram
         pipelineDescriptor.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat
 
@@ -80,14 +85,14 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable,
               let renderPassDescriptor = view.currentRenderPassDescriptor,
-              let texture = currentTexture,
-              let pipelineState = pipelineState else { return }
-
-        guard let commandBuffer = commandQueue.makeCommandBuffer(),
+              let pipelineState = pipelineState,
+              let commandBuffer = commandQueue.makeCommandBuffer(),
               let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
 
         renderEncoder.setRenderPipelineState(pipelineState)
-        renderEncoder.setFragmentTexture(texture, index: 0)
+        if let texture = currentTexture {
+            renderEncoder.setFragmentTexture(texture, index: 0)
+        }
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
 
         renderEncoder.endEncoding()
@@ -95,3 +100,4 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         commandBuffer.commit()
     }
 }
+
