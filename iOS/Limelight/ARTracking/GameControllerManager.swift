@@ -204,10 +204,24 @@ class GameControllerManager: ObservableObject {
                     }
                 } else if let axis = element as? GCControllerAxisInput {
                     let key = elementName.lowercased()
-                    if (key.contains("x") || key.contains("horizontal")) && abs(axis.value) > 0.05 { inputData.stickX = Float(axis.value) }
-                    if (key.contains("y") || key.contains("vertical")) && abs(axis.value) > 0.05 { inputData.stickY = Float(axis.value) }
+                    // thumbstick / joystick のみ安全に抽出 (トリガーやジャイロの軸による誤上書きを完全防止)
+                    if key.contains("thumbstick") || key.contains("joystick") || key.contains("stick") {
+                        if key.contains("x") || key.contains("horizontal") {
+                            if abs(axis.value) > 0.05 { inputData.stickX = Float(axis.value) }
+                        } else if key.contains("y") || key.contains("vertical") {
+                            if abs(axis.value) > 0.05 { inputData.stickY = Float(axis.value) }
+                        }
+                    }
                 }
             }
+        }
+
+        // Joy-Con (L) の D-Pad (十字キー) をスティック移動入力としてもフォールバック連動
+        if chirality == 0 {
+            if (mask & ControllerButtonBits.btnDpadLeft) != 0 { inputData.stickX = -1.0 }
+            if (mask & ControllerButtonBits.btnDpadRight) != 0 { inputData.stickX = 1.0 }
+            if (mask & ControllerButtonBits.btnDpadUp) != 0 { inputData.stickY = 1.0 }
+            if (mask & ControllerButtonBits.btnDpadDown) != 0 { inputData.stickY = -1.0 }
         }
 
         inputData.buttonMask = mask

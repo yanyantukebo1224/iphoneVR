@@ -68,15 +68,15 @@ void ScreenStreamer::CaptureLoop() {
     encoderParams.Parameter[0].Guid = EncoderQuality;
     encoderParams.Parameter[0].Type = EncoderParameterValueTypeLong;
     encoderParams.Parameter[0].NumberOfValues = 1;
-    ULONG quality = 60;
+    ULONG quality = 80;
     encoderParams.Parameter[0].Value = &quality;
 
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);
 
-    // 🖥️ 720p 高速スケールバッファ (超軽量 30KB/frame 転送)
-    int streamW = 1280;
-    int streamH = 720;
+    // High definition 1080p/2K stream buffer
+    int streamW = (screenW >= 2560) ? 1920 : (screenW >= 1920 ? 1920 : 1280);
+    int streamH = (screenH >= 1440) ? 1080 : (screenH >= 1080 ? 1080 : 720);
 
     HDC hdcScreen = GetDC(NULL);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
@@ -86,7 +86,7 @@ void ScreenStreamer::CaptureLoop() {
     HDC hdcScaled = CreateCompatibleDC(hdcScreen);
     HBITMAP hScaledBitmap = CreateCompatibleBitmap(hdcScreen, streamW, streamH);
     HGDIOBJ hOldScaled = SelectObject(hdcScaled, hScaledBitmap);
-    SetStretchBltMode(hdcScaled, COLORONCOLOR);
+    SetStretchBltMode(hdcScaled, HALFTONE);
 
     while (m_running) {
         auto startTime = std::chrono::steady_clock::now();
@@ -118,10 +118,10 @@ void ScreenStreamer::CaptureLoop() {
             }
         }
 
-        // 🖥️ Zero-Overhead Direct Desktop BitBlt Capture
+        // Zero-Overhead Direct Desktop BitBlt Capture
         BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
 
-        // 🚀 高速縮小転送 (720p)
+        // High-Quality Dynamic Auto-Scale
         StretchBlt(hdcScaled, 0, 0, streamW, streamH, hdcMem, 0, 0, captureW, captureH, SRCCOPY);
 
         Bitmap bitmap(hScaledBitmap, NULL);
