@@ -212,20 +212,30 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         if let middleMCP = recognizedPoints[.middleMCP] {
             let dirX = Float(middleMCP.location.x - wristPoint.location.x)
             let dirY = Float(middleMCP.location.y - wristPoint.location.y)
-
             let rollAngle = atan2(dirX, max(0.001, dirY))
-            let pitchRad = Float(80.0 * .pi / 180.0)
+
+            var palmYaw: Float = 0.0
+            if let idxMCP = recognizedPoints[.indexMCP], let pnkMCP = recognizedPoints[.littleMCP] {
+                let px = Float(pnkMCP.location.x - idxMCP.location.x)
+                let py = Float(pnkMCP.location.y - idxMCP.location.y)
+                palmYaw = atan2(py, px) * (isLeft ? -0.5 : 0.5)
+            }
+
+            let dist = hypot(dirX, dirY)
+            let pitchRad = (dist > 0.08) ? Float(45.0 * .pi / 180.0) : Float(75.0 * .pi / 180.0)
 
             let cp = cos(pitchRad * 0.5)
             let sp = sin(pitchRad * 0.5)
             let cr = cos(-rollAngle * 0.5)
             let sr = sin(-rollAngle * 0.5)
+            let cy = cos(palmYaw * 0.5)
+            let sy = sin(palmYaw * 0.5)
 
             wristQuat = Quaternionf(
-                w: cp * cr,
-                x: sp * cr,
-                y: -sp * sr,
-                z: cp * sr
+                w: cp * cr * cy + sp * sr * sy,
+                x: sp * cr * cy - cp * sr * sy,
+                y: cp * sp * cy + sp * cp * sy,
+                z: cp * cr * sy - sp * sr * cy
             )
         }
 
@@ -280,8 +290,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         curls.pinky = computeFingerCurl(.littleMCP, .littleTip)
 
         if isPinching == 1 {
-            curls.thumb = max(curls.thumb, 0.85)
-            curls.index = max(curls.index, 0.90)
+            curls.thumb = 0.65
+            curls.index = 0.70
         }
 
         // 🖐️ 各指の Splay（指の開き角度 -1.0〜1.0）精密計算

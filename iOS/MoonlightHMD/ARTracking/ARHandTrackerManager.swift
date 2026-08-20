@@ -216,30 +216,37 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             prevRightWristPos = targetWrist
         }
 
-        // 3. 3D 回転クォータニオン (垂直持ちコントローラー姿勢系 ゼロベース完全再構築)
-        // 写真のように手首から指先が真上を向いたとき、コントローラー先端が真上 (+Y)、ボタン面が手前を向く
+        // 3. 3D 回転クォータニオン (手首-指先方向 & 手のひら法線からの真の 3D 姿勢導出)
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
         if let middleMCP = recognizedPoints[.middleMCP] {
             let dirX = Float(middleMCP.location.x - wristPoint.location.x)
             let dirY = Float(middleMCP.location.y - wristPoint.location.y)
-
-            // 手首の左右への傾き角 (Roll)
             let rollAngle = atan2(dirX, max(0.001, dirY))
 
-            // コントローラーを真上に立てて持つ基本姿勢角 (Pitch: +80度)
-            let pitchRad = Float(80.0 * .pi / 180.0)
+            // 手のひら（人差し指->小指）の横方向ベクトル
+            var palmYaw: Float = 0.0
+            if let idxMCP = recognizedPoints[.indexMCP], let pnkMCP = recognizedPoints[.littleMCP] {
+                let px = Float(pnkMCP.location.x - idxMCP.location.x)
+                let py = Float(pnkMCP.location.y - idxMCP.location.y)
+                palmYaw = atan2(py, px) * (isLeft ? -0.5 : 0.5)
+            }
+
+            // 指先方向に応じた動的ピッチ角
+            let dist = hypot(dirX, dirY)
+            let pitchRad = (dist > 0.08) ? Float(45.0 * .pi / 180.0) : Float(75.0 * .pi / 180.0)
 
             let cp = cos(pitchRad * 0.5)
             let sp = sin(pitchRad * 0.5)
             let cr = cos(-rollAngle * 0.5)
             let sr = sin(-rollAngle * 0.5)
+            let cy = cos(palmYaw * 0.5)
+            let sy = sin(palmYaw * 0.5)
 
-            // q_pitch * q_roll の厳密な 3D クォータニオン合成
             wristQuat = Quaternionf(
-                w: cp * cr,
-                x: sp * cr,
-                y: -sp * sr,
-                z: cp * sr
+                w: cp * cr * cy + sp * sr * sy,
+                x: sp * cr * cy - cp * sr * sy,
+                y: cp * sp * cy + sp * cp * sy,
+                z: cp * cr * sy - sp * sr * cy
             )
         }
 
@@ -282,11 +289,10 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             return max(0.0, min(1.0, rawCurl))
         }
 
-        // 👍 親指の開き・立ち上がり感度（ピストルポーズ対応）
+        // 👍 親指の開き・立ち上がり感度
         let computeThumbCurl = { () -> Float in
             guard let tip = recognizedPoints[.thumbTip], let indexMcp = recognizedPoints[.indexMCP] else { return 0.0 }
             let dist = hypot(Float(tip.location.x - indexMcp.location.x), Float(tip.location.y - indexMcp.location.y))
-            // 親指が立った状態（約0.18以上）= 0.0, 握り込んだ状態（約0.06以下）= 1.0
             let raw = (0.18 - dist) / 0.12
             return max(0.0, min(1.0, raw))
         }
@@ -298,9 +304,10 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         curls.ring = computeFingerCurl(.ringMCP, .ringTip)
         curls.pinky = computeFingerCurl(.littleMCP, .littleTip)
 
+        // 👌 OKサイン (ピンチ) 時の指先密着丸ポーズ
         if isPinching == 1 {
-            curls.thumb = max(curls.thumb, 0.85)
-            curls.index = max(curls.index, 0.90)
+            curls.thumb = 0.65
+            curls.index = 0.70
         }
 
         // 🖐️ 各指の Splay（指の開き角度 -1.0〜1.0）精密計算

@@ -144,7 +144,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         (rawZ - m_lastPosition[2]) * (rawZ - m_lastPosition[2])
     );
 
-    if (handData.isTracked == 1 && deltaMovement > 0.001f) {
+    if (handData.isTracked == 1) {
         m_lastMovementTime = now;
         m_lastPosition[0] = rawX;
         m_lastPosition[1] = rawY;
@@ -155,10 +155,12 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         m_pose.vecPosition[2] = headPos.z + rawZ;
 
         const Quaternionf& wRot = handData.joints[VISION_JOINT_WRIST].orientation;
-        m_pose.qRotation.w = wRot.w;
-        m_pose.qRotation.x = wRot.x;
-        m_pose.qRotation.y = wRot.y;
-        m_pose.qRotation.z = wRot.z;
+        if (wRot.w != 0.0f || wRot.x != 0.0f || wRot.y != 0.0f || wRot.z != 0.0f) {
+            m_pose.qRotation.w = wRot.w;
+            m_pose.qRotation.x = wRot.x;
+            m_pose.qRotation.y = wRot.y;
+            m_pose.qRotation.z = wRot.z;
+        }
     } else {
         auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastMovementTime).count();
         if (elapsedMs > 500) {
@@ -173,11 +175,6 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
                     m_pose.qRotation.x = cRot.x;
                     m_pose.qRotation.y = cRot.y;
                     m_pose.qRotation.z = cRot.z;
-                } else {
-                    m_pose.qRotation.w = 1.0;
-                    m_pose.qRotation.x = 0.0;
-                    m_pose.qRotation.y = 0.0;
-                    m_pose.qRotation.z = 0.0;
                 }
             } else {
                 m_pose.qRotation.w = 1.0;
