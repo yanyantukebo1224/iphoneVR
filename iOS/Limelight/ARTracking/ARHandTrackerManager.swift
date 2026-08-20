@@ -106,28 +106,29 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         // Switch / GameController 接続時の物理コントローラー入力をマージ
         let gcMgr = GameControllerManager.shared
-        if gcMgr.isConnected {
-            if newLeft == nil {
-                var leftDummy = createDefaultHandData(chirality: 0)
-                leftDummy.controller = gcMgr.getInputData(for: 0)
-                if leftDummy.controller.isConnected == 1 {
-                    leftDummy.isTracked = 1
-                    newLeft = leftDummy
-                }
-            } else {
-                newLeft?.controller = gcMgr.getInputData(for: 0)
-            }
+        let leftInput = gcMgr.getInputData(for: 0)
+        let rightInput = gcMgr.getInputData(for: 1)
 
-            if newRight == nil {
-                var rightDummy = createDefaultHandData(chirality: 1)
-                rightDummy.controller = gcMgr.getInputData(for: 1)
-                if rightDummy.controller.isConnected == 1 {
-                    rightDummy.isTracked = 1
-                    newRight = rightDummy
-                }
-            } else {
-                newRight?.controller = gcMgr.getInputData(for: 1)
+        if newLeft == nil {
+            var leftDummy = createDefaultHandData(chirality: 0)
+            leftDummy.controller = leftInput
+            if leftInput.isConnected == 1 {
+                leftDummy.isTracked = 1
+                newLeft = leftDummy
             }
+        } else {
+            newLeft?.controller = leftInput
+        }
+
+        if newRight == nil {
+            var rightDummy = createDefaultHandData(chirality: 1)
+            rightDummy.controller = rightInput
+            if rightInput.isConnected == 1 {
+                rightDummy.isTracked = 1
+                newRight = rightDummy
+            }
+        } else {
+            newRight?.controller = rightInput
         }
 
         DispatchQueue.main.async {

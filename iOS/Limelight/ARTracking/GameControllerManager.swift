@@ -84,33 +84,49 @@ class GameControllerManager: ObservableObject {
 
     func getInputData(for chirality: UInt8) -> ControllerInputData {
         var inputData = ControllerInputData()
-
-        let targetController: GCController?
-        if chirality == 0 {
-            // Left Hand
-            targetController = leftController ?? primaryController
-        } else {
-            // Right Hand
-            targetController = rightController ?? primaryController
+        let controllers = GCController.controllers()
+        guard !controllers.isEmpty else {
+            inputData.isConnected = 0
+            return inputData
         }
 
-        guard let controller = targetController, controller.isAttachedToDevice || true else {
-            inputData.isConnected = 0
+        // コントローラーの選択: 2台接続時は 0:Left, 1:Right、1台接続時は両手または該当手
+        var selectedController: GCController? = nil
+        for ctrl in controllers {
+            let name = (ctrl.vendorName ?? "").lowercased()
+            if chirality == 0 && (name.contains("joy-con (l)") || name.contains("left")) {
+                selectedController = ctrl
+                break
+            } else if chirality == 1 && (name.contains("joy-con (r)") || name.contains("right")) {
+                selectedController = ctrl
+                break
+            }
+        }
+
+        if selectedController == nil {
+            if chirality == 0 && controllers.count > 1 {
+                selectedController = controllers[0]
+            } else if chirality == 1 && controllers.count > 1 {
+                selectedController = controllers[1]
+            } else {
+                selectedController = controllers.first
+            }
+        }
+
+        guard let controller = selectedController else {
             return inputData
         }
 
         inputData.isConnected = 1
         var mask: UInt32 = 0
 
-        // Extended Gamepad 入力取得
+        // 1. ExtendedGamepad
         if let gamepad = controller.extendedGamepad {
-            // Buttons
             if gamepad.buttonA.isPressed { mask |= ControllerButtonBits.btnAorX }
             if gamepad.buttonB.isPressed { mask |= ControllerButtonBits.btnBorY }
             if gamepad.buttonX.isPressed { mask |= ControllerButtonBits.btnXorPlus }
             if gamepad.buttonY.isPressed { mask |= ControllerButtonBits.btnYorMinus }
 
-            // Triggers & Shoulders
             if chirality == 0 {
                 // Left
                 if gamepad.leftShoulder.isPressed { mask |= ControllerButtonBits.btnGripClick }
@@ -120,7 +136,7 @@ class GameControllerManager: ObservableObject {
 
                 inputData.stickX = Float(gamepad.leftThumbstick.xAxis.value)
                 inputData.stickY = Float(gamepad.leftThumbstick.yAxis.value)
-                if let leftStickButton = gamepad.leftThumbstickButton, leftStickButton.isPressed {
+                if let stickBtn = gamepad.leftThumbstickButton, stickBtn.isPressed {
                     mask |= ControllerButtonBits.btnThumbstickClick
                 }
             } else {
@@ -132,7 +148,7 @@ class GameControllerManager: ObservableObject {
 
                 inputData.stickX = Float(gamepad.rightThumbstick.xAxis.value)
                 inputData.stickY = Float(gamepad.rightThumbstick.yAxis.value)
-                if let rightStickButton = gamepad.rightThumbstickButton, rightStickButton.isPressed {
+                if let stickBtn = gamepad.rightThumbstickButton, stickBtn.isPressed {
                     mask |= ControllerButtonBits.btnThumbstickClick
                 }
             }
@@ -144,20 +160,39 @@ class GameControllerManager: ObservableObject {
             if gamepad.dpad.right.isPressed { mask |= ControllerButtonBits.btnDpadRight }
 
             // Menu / System
-            if gamepad.buttonMenu.isPressed && gamepad.buttonMenu.value > 0.8 {
-                mask |= ControllerButtonBits.btnSystem
-            }
-            if let buttonOptions = gamepad.buttonOptions, buttonOptions.isPressed, buttonOptions.value > 0.8 {
-                mask |= ControllerButtonBits.btnSystem
-            }
-            if let buttonHome = gamepad.buttonHome, buttonHome.isPressed, buttonHome.value > 0.8 {
-                mask |= ControllerButtonBits.btnSystem
+            if gamepad.buttonMenu.isPressed { mask |= ControllerButtonBits.btnSystem }
+            if let opt = gamepad.buttonOptions, opt.isPressed { mask |= ControllerButtonBits.btnSystem }
+            if let home = gamepad.buttonHome, home.isPressed { mask |= ControllerButtonBits.btnSystem }
+        }
+
+        // 2. PhysicalInputProfile (iOS 14+ 汎用 Switch コントローラー完全対応)
+        if #available(iOS 14.0, *) {
+            let profile = controller.physicalInputProfile
+            for (elementName, element) in profile.elements {
+                if let button = element as? GCControllerButtonInput, button.isPressed {
+                    let key = elementName.lowercased()
+                    if key.contains("buttona") || key.contains("button south") { mask |= ControllerButtonBits.btnAorX }
+                    if key.contains("buttonb") || key.contains("button east") { mask |= ControllerButtonBits.btnBorY }
+                    if key.contains("buttonx") || key.contains("button west") { mask |= ControllerButtonBits.btnXorPlus }
+                    if key.contains("buttony") || key.contains("button north") { mask |= ControllerButtonBits.btnYorMinus }
+                    if key.contains("trigger") || key.contains("zl") || key.contains("zr") {
+                        mask |= ControllerButtonBits.btnTriggerClick
+                        inputData.triggerValue = max(inputData.triggerValue, Float(button.value))
+                    }
+                    if key.contains("shoulder") || key.contains("button l") || key.contains("button r") {
+                        mask |= ControllerButtonBits.btnGripClick
+                        inputData.gripValue = 1.0
+                    }
+                } else if let axis = element as? GCControllerAxisInput {
+                    let key = elementName.lowercased()
+                    if key.contains("x") && abs(axis.value) > 0.05 { inputData.stickX = Float(axis.value) }
+                    if key.contains("y") && abs(axis.value) > 0.05 { inputData.stickY = Float(axis.value) }
+                }
             }
         }
 
         inputData.buttonMask = mask
 
-        // IMU / Motion 姿勢取得
         if let motion = controller.motion {
             let attitude = motion.attitude
             inputData.controllerRot = Quaternionf(
