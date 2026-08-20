@@ -115,8 +115,14 @@ void ScreenStreamer::CaptureLoop() {
             HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, captureW, captureH);
             HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
 
-            // デスクトップサーフェスから Headset Window 領域を確実に高速転送
-            BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
+            // GPUアクセラレーションウィンドウ (DirectX / SteamVR Headset Window) の直接キャプチャ
+            BOOL captured = FALSE;
+            if (targetHwnd != NULL && IsWindow(targetHwnd)) {
+                captured = PrintWindow(targetHwnd, hdcMem, 2 /* PW_RENDERFULLCONTENT */);
+            }
+            if (!captured) {
+                BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
+            }
 
             Bitmap bitmap(hBitmap, NULL);
             IStream* pStream = NULL;

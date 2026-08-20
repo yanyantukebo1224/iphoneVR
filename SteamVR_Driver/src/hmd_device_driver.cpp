@@ -36,7 +36,6 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_SecondsFromVsyncToPhotons_Float, 0.011f);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_HasDisplayComponent_Bool, true);
-    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DisplayDebugMode_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_ContainsProximitySensor_Bool, false);
@@ -68,23 +67,23 @@ void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
 void HMDDeviceDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
     *pnX = 0;
     *pnY = 0;
-    *pnWidth = 2532;
-    *pnHeight = 1170;
+    *pnWidth = 1920;
+    *pnHeight = 1080;
 }
 
 void HMDDeviceDriver::GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t* pnHeight) {
-    *pnWidth = 1266;
-    *pnHeight = 1170;
+    *pnWidth = 960;
+    *pnHeight = 1080;
 }
 
 void HMDDeviceDriver::GetEyeOutputViewport(vr::EVREye eEye, uint32_t* pnX, uint32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
     *pnY = 0;
-    *pnWidth = 1266;
-    *pnHeight = 1170;
+    *pnWidth = 960;
+    *pnHeight = 1080;
     if (eEye == vr::Eye_Left) {
         *pnX = 0;
     } else {
-        *pnX = 1266;
+        *pnX = 960;
     }
 }
 
