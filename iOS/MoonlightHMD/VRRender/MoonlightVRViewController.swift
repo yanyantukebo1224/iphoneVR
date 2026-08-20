@@ -103,13 +103,9 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
 
     var hostIP: String = "192.168.0.13"
     private var isStreamingActive = false
-    private var displayLink: CADisplayLink?
-    private var isFetchingFrame = false
-    private let fetchSession: URLSession = {
-        let cfg = URLSessionConfiguration.ephemeral
-        cfg.timeoutIntervalForRequest = 0.5
-        return URLSession(configuration: cfg)
-    }()
+    private var streamSession: URLSession?
+    private var streamTask: URLSessionDataTask?
+    private var receivedBuffer = Data()
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -123,30 +119,27 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         stopDirectDesktopStream()
     }
 
-    // 🖥️ PC 画面丸ごとダイレクト VR ストリーム受信 (Port 9051)
+    // 🖥️ 60fps MJPEG リアルタイム連続プッシュストリーム受信 (ゼロポーリング遅延)
     func startDirectDesktopStream() {
-        displayLink = CADisplayLink(target: self, selector: #selector(fetchNextFrame))
-        displayLink?.preferredFramesPerSecond = 60
-        displayLink?.add(to: .main, forMode: .common)
-        print("🚀 Connecting to Direct PC Desktop Stream at: http://\(hostIP):9051")
+        guard let url = URL(string: "http://\(hostIP):9051/stream.mjpg") else { return }
+        
+        let config = URLSessionConfiguration.ephemeral
+        config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        streamSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue())
+        
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30.0
+        streamTask = streamSession?.dataTask(with: request)
+        streamTask?.resume()
+        print("🚀 Connected to Continuous 60fps PC VR Stream at: \(url)")
     }
 
     func stopDirectDesktopStream() {
-        displayLink?.invalidate()
-        displayLink = nil
-    }
-
-    @objc private func fetchNextFrame() {
-        guard isStreamingActive, !isFetchingFrame else { return }
-        guard let url = URL(string: "http://\(hostIP):9051/screen.jpg") else { return }
-
-        isFetchingFrame = true
-        let task = fetchSession.dataTask(with: url) { [weak self] data, response, error in
-            defer { self?.isFetchingFrame = false }
-            guard let self = self, let data = data, let image = UIImage(data: data) else { return }
-            self.updateTexture(from: image)
-        }
-        task.resume()
+        streamTask?.cancel()
+        streamTask = nil
+        streamSession?.invalidateAndCancel()
+        streamSession = nil
+        receivedBuffer.removeAll()
     }
 
     // UIImage から MTLTexture へ超高速ロード
@@ -161,21 +154,42 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
             DispatchQueue.main.async {
                 self.currentTexture = texture
             }
-        } else {
-            // フォールバック: CGContext 経由の直接 Metal テクスチャ書き込み
-            let width = cgImage.width
-            let height = cgImage.height
-            let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: width, height: height, mipmapped: false)
-            texDesc.usage = [.shaderRead, .shaderWrite]
-            if let newTex = device.makeTexture(descriptor: texDesc) {
-                var rawData = [UInt8](repeating: 0, count: width * height * 4)
-                let colorSpace = CGColorSpaceCreateDeviceRGB()
-                if let ctx = CGContext(data: &rawData, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
-                    ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-                    let region = MTLRegionMake2D(0, 0, width, height)
-                    newTex.replace(region: region, mipmapLevel: 0, withBytes: rawData, bytesPerRow: width * 4)
-                    self.currentTexture = newTex
-                }
+        }
+    }
+}
+
+// 🚀 60fps MJPEG ゼロコピーパーサー
+extension MoonlightVRViewController: URLSessionDataDelegate {
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard isStreamingActive else { return }
+        receivedBuffer.append(data)
+
+        // JPEG フレーム境界 (SOI: 0xFFD8, EOI: 0xFFD9) の高速スキャン
+        let soi = Data([0xFF, 0xD8])
+        let eoi = Data([0xFF, 0xD9])
+
+        while let startRange = receivedBuffer.range(of: soi),
+              let endRange = receivedBuffer.range(of: eoi, range: startRange.upperBound..<receivedBuffer.count) {
+            
+            let frameData = receivedBuffer.subdata(in: startRange.lowerBound..<endRange.upperBound)
+            receivedBuffer.removeSubrange(0..<endRange.upperBound)
+
+            if let image = UIImage(data: frameData) {
+                self.updateTexture(from: image)
+            }
+        }
+
+        // バッファ肥大化防止
+        if receivedBuffer.count > 1024 * 1024 * 4 {
+            receivedBuffer.removeAll()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if isStreamingActive {
+            // 自動再接続
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.startDirectDesktopStream()
             }
         }
     }

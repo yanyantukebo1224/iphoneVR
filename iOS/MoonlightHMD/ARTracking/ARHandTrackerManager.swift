@@ -217,21 +217,23 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             prevRightWristPos = targetWrist
         }
 
-        // 3. 3D 回転クォータニオン (Orientation) の完全幾何計算
+        // 3. 3D 回転クォータニオン (SteamVR Knuckles 姿勢系アラインメント)
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
         if let middleMCP = recognizedPoints[.middleMCP] {
-            // 手首 -> 中指付け根の方向ベクトル
+            // 手首 -> 中指付け根のベクトル
             let dirX = Float(middleMCP.location.x - wristPoint.location.x)
             let dirY = Float(middleMCP.location.y - wristPoint.location.y)
 
-            // 真上 (0, 1) を基準角度 0 とした手首の傾き角
-            let angle = atan2(dirX, dirY)
-            let halfAngle = -angle * 0.5
+            // Roll (Z軸回転)
+            let rollAngle = atan2(dirX, max(0.001, dirY))
+            let halfRoll = -rollAngle * 0.5
+
+            // 基本姿勢: 手のひらを前、指先を上に向ける自然な回転
             wristQuat = Quaternionf(
-                w: cos(halfAngle),
+                w: cos(halfRoll),
                 x: 0.0,
                 y: 0.0,
-                z: sin(halfAngle)
+                z: sin(halfRoll)
             )
         }
 
