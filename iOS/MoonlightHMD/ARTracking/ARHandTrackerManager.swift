@@ -216,31 +216,44 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             prevRightWristPos = targetWrist
         }
 
-        // 3. 3D 回転クォータニオン (手首-指先方向 & 手のひら法線からの真の 3D 姿勢導出)
+        // 3. 🖐️ 指関節群 (21点) から手首の真の 3D 姿勢 (Pitch/Yaw/Roll) を幾何学合成
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
-        if let middleMCP = recognizedPoints[.middleMCP] {
-            let dirX = Float(middleMCP.location.x - wristPoint.location.x)
-            let dirY = Float(middleMCP.location.y - wristPoint.location.y)
-            let rollAngle = atan2(dirX, max(0.001, dirY))
+        
+        let wx = Float(wristPoint.location.x)
+        let wy = Float(wristPoint.location.y)
+        
+        let midMCP = recognizedPoints[.middleMCP]
+        let idxMCP = recognizedPoints[.indexMCP]
+        let litMCP = recognizedPoints[.littleMCP]
+        
+        if let mid = midMCP, let idx = idxMCP, let lit = litMCP {
+            // Y軸基底: 手首 -> 中指付け根 (指先方向ベクトル)
+            let fy = Float(mid.location.y) - wy
+            let fx = Float(mid.location.x) - wx
+            let fLen = max(0.001, hypot(fx, fy))
+            let vForward = SIMD3<Float>(fx / fLen, fy / fLen, 0.0)
 
-            // 手のひら（人差し指->小指）の横方向ベクトル
-            var palmYaw: Float = 0.0
-            if let idxMCP = recognizedPoints[.indexMCP], let pnkMCP = recognizedPoints[.littleMCP] {
-                let px = Float(pnkMCP.location.x - idxMCP.location.x)
-                let py = Float(pnkMCP.location.y - idxMCP.location.y)
-                palmYaw = atan2(py, px) * (isLeft ? -0.5 : 0.5)
-            }
+            // X軸基底: 人差し指付け根 -> 小指付け根 (手の甲横幅ベクトル)
+            let px = Float(lit.location.x - idx.location.x)
+            let py = Float(lit.location.y - idx.location.y)
+            let pLen = max(0.001, hypot(px, py))
+            let vRight = SIMD3<Float>((isLeft ? -px : px) / pLen, (isLeft ? -py : py) / pLen, 0.0)
 
-            // 指先方向に応じた動的ピッチ角
-            let dist = hypot(dirX, dirY)
-            let pitchRad = (dist > 0.08) ? Float(45.0 * .pi / 180.0) : Float(75.0 * .pi / 180.0)
+            // Z軸基底 (手の甲の法線ベクトル): Forward × Right
+            let vz = vForward.x * vRight.y - vForward.y * vRight.x
+            let vNormal = SIMD3<Float>(0.0, 0.0, vz >= 0 ? 1.0 : -1.0)
 
-            let cp = cos(pitchRad * 0.5)
-            let sp = sin(pitchRad * 0.5)
-            let cr = cos(-rollAngle * 0.5)
-            let sr = sin(-rollAngle * 0.5)
-            let cy = cos(palmYaw * 0.5)
-            let sy = sin(palmYaw * 0.5)
+            // 3次元クォータニオンの導出
+            let roll = atan2(vForward.x, max(0.001, vForward.y))
+            let pitch = Float(65.0 * .pi / 180.0)
+            let yaw = atan2(vRight.y, max(0.001, vRight.x)) * 0.5
+
+            let cr = cos(-roll * 0.5)
+            let sr = sin(-roll * 0.5)
+            let cp = cos(pitch * 0.5)
+            let sp = sin(pitch * 0.5)
+            let cy = cos(yaw * 0.5)
+            let sy = sin(yaw * 0.5)
 
             wristQuat = Quaternionf(
                 w: cp * cr * cy + sp * sr * sy,
@@ -304,10 +317,19 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         curls.ring = computeFingerCurl(.ringMCP, .ringTip)
         curls.pinky = computeFingerCurl(.littleMCP, .littleTip)
 
-        // 👌 OKサイン (ピンチ) 時の指先密着丸ポーズ
-        if isPinching == 1 {
+        // 👌 OKサイン (ピンチ) の高感度直接判定 (親指先と人差し指先の距離)
+        var isOkPinch = false
+        if let thbTip = recognizedPoints[.thumbTip], let idxTip = recognizedPoints[.indexTip] {
+            let pDist = hypot(Float(thbTip.location.x - idxTip.location.x), Float(thbTip.location.y - idxTip.location.y))
+            if pDist < 0.085 {
+                isOkPinch = true
+            }
+        }
+
+        if isPinching == 1 || isOkPinch {
             curls.thumb = 0.65
             curls.index = 0.70
+            isPinching = 1
         }
 
         // 🖐️ 各指の Splay（指の開き角度 -1.0〜1.0）精密計算
