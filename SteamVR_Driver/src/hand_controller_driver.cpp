@@ -505,14 +505,14 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
         finger.distal.rotation = DEG_TO_RAD(5.f);
     }
 
-    hand.thumb.metacarpal.swing[0] = DEG_TO_RAD(10.f);
-    hand.thumb.metacarpal.swing[1] = DEG_TO_RAD(40.f);
-    hand.thumb.metacarpal.twist = DEG_TO_RAD(70.f);
+    hand.thumb.metacarpal.swing[0] = DEG_TO_RAD(5.f);
+    hand.thumb.metacarpal.swing[1] = DEG_TO_RAD(18.f);
+    hand.thumb.metacarpal.twist = DEG_TO_RAD(35.f);
 
-    hand.fingers[0].metacarpal.swing[1] = DEG_TO_RAD(13.f);
+    hand.fingers[0].metacarpal.swing[1] = DEG_TO_RAD(10.f);
     hand.fingers[1].metacarpal.swing[1] = DEG_TO_RAD(0.f);
-    hand.fingers[2].metacarpal.swing[1] = DEG_TO_RAD(-15.f);
-    hand.fingers[3].metacarpal.swing[1] = DEG_TO_RAD(-27.f);
+    hand.fingers[2].metacarpal.swing[1] = DEG_TO_RAD(-10.f);
+    hand.fingers[3].metacarpal.swing[1] = DEG_TO_RAD(-20.f);
 
     float curlThumb  = std::clamp(handData.curls.thumb, 0.0f, 1.0f);
     float curlIndex  = std::clamp(handData.curls.index, 0.0f, 1.0f);
@@ -527,20 +527,21 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float splayPinky  = handData.splays.pinky;
 
     // VMT Scalar Linear Space: 0.0 (Open Hand/パー) -> 1.0 (Fist/グー)
-    // 🖐️ 手のひら内側 (握る方向) へ曲げるため角度を負 (マイナス) に反転！
+    // 🖐️ 親指の自然な曲がり (人差し指に沿って握り込む)
     hand.thumb.metacarpal.swing[0] -= DEG_TO_RAD(curlThumb * 10.f);
-    hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 10.f);
-    hand.thumb.proximal.swing[0] = -DEG_TO_RAD(curlThumb * 50.f);
-    hand.thumb.proximal.swing[1] = DEG_TO_RAD((1.0f - curlThumb) * 35.f + curlThumb * 10.f + splayThumb * 10.f);
-    hand.thumb.distal.rotation = -DEG_TO_RAD(curlThumb * 50.f);
+    hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 15.f);
+    hand.thumb.proximal.swing[0] = -DEG_TO_RAD(curlThumb * 45.f);
+    hand.thumb.proximal.swing[1] = DEG_TO_RAD((1.0f - curlThumb) * 15.f + curlThumb * 5.f + splayThumb * 15.f);
+    hand.thumb.distal.rotation = -DEG_TO_RAD(curlThumb * 45.f);
 
     float curls[4] = { curlIndex, curlMiddle, curlRing, curlPinky };
     float splays[4] = { splayIndex, splayMiddle, splayRing, splayPinky };
 
+    // 🖐️ 4本指の縦・横・斜め追従 (Curl & Splay ダイナミック連動)
     for (int i = 0; i < 4; ++i) {
         hand.fingers[i].metacarpal.swing[0] -= DEG_TO_RAD(curls[i] * 5.f);
         hand.fingers[i].proximal.swing[0] = -DEG_TO_RAD(curls[i] * 75.f);
-        hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 10.f);
+        hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 25.f);
         hand.fingers[i].intermediate.rotation = -DEG_TO_RAD(curls[i] * 75.f);
         hand.fingers[i].distal.rotation = -DEG_TO_RAD(curls[i] * 65.f);
     }

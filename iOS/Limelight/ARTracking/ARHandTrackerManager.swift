@@ -315,19 +315,20 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
 
         // 🖐️ 各指の Splay（指の開き角度 -1.0〜1.0）精密計算
-        let computeFingerSplay = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName, refKey: VNHumanHandPoseObservation.JointName) -> Float in
-            guard let tip = recognizedPoints[tipKey], let ref = recognizedPoints[refKey] else { return 0.0 }
-            let dx = Float(tip.location.x - ref.location.x)
-            let splay = (isLeft ? -1.0 : 1.0) * (dx * 5.0)
+        let computeFingerSplay = { (tipKey: VNHumanHandPoseObservation.JointName, mcpKey: VNHumanHandPoseObservation.JointName, refMcpKey: VNHumanHandPoseObservation.JointName) -> Float in
+            guard let tip = recognizedPoints[tipKey], let mcp = recognizedPoints[mcpKey], let ref = recognizedPoints[refMcpKey] else { return 0.0 }
+            let dx = Float(tip.location.x - mcp.location.x)
+            let refDx = Float(ref.location.x - mcp.location.x)
+            let splay = (isLeft ? -1.0 : 1.0) * ((dx - refDx) * 6.0)
             return max(-1.0, min(1.0, splay))
         }
 
         var splays = FingerSplays()
-        splays.thumb = computeFingerSplay(.thumbCMC, .thumbTip, .wrist)
-        splays.index = computeFingerSplay(.indexMCP, .indexTip, .middleMCP)
+        splays.thumb = isLeft ? -0.2 : 0.2
+        splays.index = computeFingerSplay(.indexTip, .indexMCP, .middleMCP)
         splays.middle = 0.0
-        splays.ring = computeFingerSplay(.ringMCP, .ringTip, .middleMCP)
-        splays.pinky = computeFingerSplay(.littleMCP, .littleTip, .ringMCP)
+        splays.ring = computeFingerSplay(.ringTip, .ringMCP, .middleMCP)
+        splays.pinky = computeFingerSplay(.littleTip, .littleMCP, .middleMCP)
 
         let tupleJoints = (
             bones[0], bones[1], bones[2], bones[3], bones[4],
