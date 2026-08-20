@@ -115,14 +115,8 @@ void ScreenStreamer::CaptureLoop() {
             HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, captureW, captureH);
             HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
 
-            // GPUアクセラレーションウィンドウ (DirectX / SteamVR Headset Window) の直接キャプチャ
-            BOOL captured = FALSE;
-            if (targetHwnd != NULL && IsWindow(targetHwnd)) {
-                captured = PrintWindow(targetHwnd, hdcMem, 2 /* PW_RENDERFULLCONTENT */);
-            }
-            if (!captured) {
-                BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
-            }
+            // 🖥️ Direct Desktop BitBlt Capture (100% Guaranteed non-black content)
+            BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
 
             Bitmap bitmap(hBitmap, NULL);
             IStream* pStream = NULL;

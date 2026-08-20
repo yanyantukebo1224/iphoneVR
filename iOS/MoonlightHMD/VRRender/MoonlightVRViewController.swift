@@ -158,7 +158,9 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
             .generateMipmaps: false,
             .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
         ]) {
-            self.currentTexture = texture
+            DispatchQueue.main.async {
+                self.currentTexture = texture
+            }
         } else {
             // フォールバック: CGContext 経由の直接 Metal テクスチャ書き込み
             let width = cgImage.width
