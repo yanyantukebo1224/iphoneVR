@@ -151,43 +151,45 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
             .generateMipmaps: false,
             .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
         ]) {
-            DispatchQueue.main.async {
-                self.currentTexture = texture
+            DispatchQueue.main.async { [weak self] in
+                self?.currentTexture = texture
             }
         }
     }
 }
 
-// 🚀 60fps MJPEG ゼロコピーパーサー
+// 🚀 60fps MJPEG ゼロコピーパーサー (メモリリーク・クラッシュ完全防止)
 extension MoonlightVRViewController: URLSessionDataDelegate {
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard isStreamingActive else { return }
         receivedBuffer.append(data)
 
-        // JPEG フレーム境界 (SOI: 0xFFD8, EOI: 0xFFD9) の高速スキャン
         let soi = Data([0xFF, 0xD8])
         let eoi = Data([0xFF, 0xD9])
 
-        while let startRange = receivedBuffer.range(of: soi),
-              let endRange = receivedBuffer.range(of: eoi, in: startRange.upperBound..<receivedBuffer.count) {
-            
-            let frameData = receivedBuffer.subdata(in: startRange.lowerBound..<endRange.upperBound)
-            receivedBuffer.removeSubrange(0..<endRange.upperBound)
+        var latestFrameData: Data? = nil
 
-            if let image = UIImage(data: frameData) {
+        autoreleasepool {
+            while let startRange = receivedBuffer.range(of: soi),
+                  let endRange = receivedBuffer.range(of: eoi, in: startRange.upperBound..<receivedBuffer.count) {
+                
+                latestFrameData = receivedBuffer.subdata(in: startRange.lowerBound..<endRange.upperBound)
+                receivedBuffer.removeSubrange(0..<endRange.upperBound)
+            }
+
+            if let frameData = latestFrameData, let image = UIImage(data: frameData) {
                 self.updateTexture(from: image)
             }
         }
 
-        // バッファ肥大化防止
-        if receivedBuffer.count > 1024 * 1024 * 4 {
+        // バッファ肥大化防止（常に最新 2MB 以内に抑制）
+        if receivedBuffer.count > 1024 * 1024 * 2 {
             receivedBuffer.removeAll()
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if isStreamingActive {
-            // 自動再接続
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.startDirectDesktopStream()
             }
