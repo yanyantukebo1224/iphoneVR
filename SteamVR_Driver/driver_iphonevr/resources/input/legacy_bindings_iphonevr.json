@@ -34,6 +34,21 @@
           }
         },
         {
+          "path": "/input/trackpad",
+          "mode": "trackpad",
+          "inputs": {
+            "position": {
+              "output": "/actions/legacy/in/left_trackpad"
+            },
+            "click": {
+              "output": "/actions/legacy/in/left_trackpad_click"
+            },
+            "touch": {
+              "output": "/actions/legacy/in/left_trackpad_touch"
+            }
+          }
+        },
+        {
           "path": "/input/x",
           "mode": "button",
           "inputs": {
@@ -89,6 +104,21 @@
           }
         },
         {
+          "path": "/input/trackpad",
+          "mode": "trackpad",
+          "inputs": {
+            "position": {
+              "output": "/actions/legacy/in/right_trackpad"
+            },
+            "click": {
+              "output": "/actions/legacy/in/right_trackpad_click"
+            },
+            "touch": {
+              "output": "/actions/legacy/in/right_trackpad_touch"
+            }
+          }
+        },
+        {
           "path": "/input/a",
           "mode": "button",
           "inputs": {
@@ -113,6 +143,6 @@
     }
   },
   "controller_type": "knuckles",
-  "description": "iPhoneVR Default Controller Bindings",
+  "description": "iPhoneVR Default Controller Bindings with Locomotion Support",
   "name": "iPhoneVR Default Bindings"
 }

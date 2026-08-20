@@ -98,6 +98,12 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/thumbstick/x", &m_ulThumbstickXComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedTwoSided);
     vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/thumbstick/y", &m_ulThumbstickYComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedTwoSided);
     vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/thumbstick/click", &m_ulThumbstickClickComponent);
+    vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/thumbstick/touch", &m_ulThumbstickTouchComponent);
+
+    vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/trackpad/x", &m_ulTrackpadXComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedTwoSided);
+    vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/trackpad/y", &m_ulTrackpadYComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedTwoSided);
+    vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/trackpad/click", &m_ulTrackpadClickComponent);
+    vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/trackpad/touch", &m_ulTrackpadTouchComponent);
 
     vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/system/click", &m_ulSystemButtonComponent);
 
@@ -247,11 +253,33 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         if (m_ulThumbstickXComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickXComponent, stickX, 0);
         }
+        bool isStickTouched = (std::abs(stickX) > 0.05f || std::abs(stickY) > 0.05f || stickClicked);
+
+        if (m_ulThumbstickXComponent != vr::k_ulInvalidInputComponentHandle) {
+            vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickXComponent, stickX, 0);
+        }
         if (m_ulThumbstickYComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickYComponent, stickY, 0);
         }
         if (m_ulThumbstickClickComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickClickComponent, stickClicked, 0);
+        }
+        if (m_ulThumbstickTouchComponent != vr::k_ulInvalidInputComponentHandle) {
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickTouchComponent, isStickTouched, 0);
+        }
+
+        // Trackpad にも同時にミラーリング (Trackpad 移動型ゲーム対応)
+        if (m_ulTrackpadXComponent != vr::k_ulInvalidInputComponentHandle) {
+            vr::VRDriverInput()->UpdateScalarComponent(m_ulTrackpadXComponent, stickX, 0);
+        }
+        if (m_ulTrackpadYComponent != vr::k_ulInvalidInputComponentHandle) {
+            vr::VRDriverInput()->UpdateScalarComponent(m_ulTrackpadYComponent, stickY, 0);
+        }
+        if (m_ulTrackpadTouchComponent != vr::k_ulInvalidInputComponentHandle) {
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTrackpadTouchComponent, isStickTouched, 0);
+        }
+        if (m_ulTrackpadClickComponent != vr::k_ulInvalidInputComponentHandle) {
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTrackpadClickComponent, stickClicked, 0);
         }
 
         if (m_ulSystemButtonComponent != vr::k_ulInvalidInputComponentHandle) {

@@ -82,7 +82,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         if let observations = results, !observations.isEmpty {
             for observation in observations {
-                // 🖐️ Apple Vision公式の生体力学的左右手判定 (親指・小指の骨格幾何)
+                // 🖐️ Apple Vision公式の生体力学的左右手判定
                 var determinedChirality: UInt32 = 0
                 if observation.chirality == .right {
                     determinedChirality = 1
@@ -90,7 +90,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
                     determinedChirality = 0
                 } else {
                     if let wrist = try? observation.recognizedPoints(.all)[.wrist] {
-                        determinedChirality = (wrist.location.x <= 0.5) ? 0 : 1
+                        // リアカメラ視野: 画面左(x <= 0.5)はユーザーの右手(1)、画面右(x > 0.5)はユーザーの左手(0)
+                        determinedChirality = (wrist.location.x <= 0.5) ? 1 : 0
                     }
                 }
 
@@ -112,10 +113,9 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         if newLeft == nil {
             var leftDummy = createDefaultHandData(chirality: 0)
             leftDummy.controller = leftInput
-            if leftInput.isConnected == 1 {
-                leftDummy.isTracked = 1
-                newLeft = leftDummy
-            }
+            // コントローラー接続時または直前の手をホールド
+            leftDummy.isTracked = (leftInput.isConnected == 1) ? 1 : 0
+            newLeft = leftDummy
         } else {
             newLeft?.controller = leftInput
         }
@@ -123,10 +123,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         if newRight == nil {
             var rightDummy = createDefaultHandData(chirality: 1)
             rightDummy.controller = rightInput
-            if rightInput.isConnected == 1 {
-                rightDummy.isTracked = 1
-                newRight = rightDummy
-            }
+            rightDummy.isTracked = (rightInput.isConnected == 1) ? 1 : 0
+            newRight = rightDummy
         } else {
             newRight?.controller = rightInput
         }
@@ -140,16 +138,22 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     }
 
     private func createDefaultHandData(chirality: UInt32) -> HandPacketData {
+        // 自然な構え位置 (左手: 左胸前方 -0.22m, 右手: 右胸前方 +0.22m)
+        let defaultPos = (chirality == 0) ?
+            Vector3f(x: -0.22, y: -0.25, z: -0.45) :
+            Vector3f(x: 0.22, y: -0.25, z: -0.45)
+
+        let wristBone = BoneTransform(position: defaultPos, orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         let tupleJoints = (
-            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            wristBone, dummyBone, dummyBone, dummyBone, dummyBone,
             dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
             dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
             dummyBone, dummyBone, dummyBone, dummyBone, dummyBone, dummyBone
         )
         return HandPacketData(
             chirality: chirality,
-            isTracked: 0,
+            isTracked: 1,
             isPinching: 0,
             pinchDistance: 1.0,
             curls: FingerCurls(),
@@ -204,7 +208,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let estimatedDepth: Float = max(0.20, min(0.85, 0.055 / handSpan))
 
         // HMDカメラ視野空間における真の3D空間座標 (X: 左右, Y: 上下, Z: 前後)
-        let rawWristX = Float(wristPoint.location.x - 0.5) * estimatedDepth * Float(1.35)
+        // リアカメラから見た座標系をユーザー自身の体感空間に鏡像マッピング (画面左 = ユーザー右手 = X > 0, 画面右 = ユーザー左手 = X < 0)
+        let rawWristX = Float(0.5 - wristPoint.location.x) * estimatedDepth * Float(1.35)
         let rawWristY = Float(0.5 - wristPoint.location.y) * estimatedDepth * Float(1.35)
         let rawWristZ = -estimatedDepth // カメラ前方 (メートル単位)
 
