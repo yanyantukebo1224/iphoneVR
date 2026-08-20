@@ -144,9 +144,9 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         m_lastPosition[1] = rawY;
         m_lastPosition[2] = rawZ;
 
-        m_pose.vecPosition[0] = headPos.x + defaultOffsetX + rawX;
-        m_pose.vecPosition[1] = effectiveHeadY + defaultOffsetY + rawY;
-        m_pose.vecPosition[2] = headPos.z + defaultOffsetZ + rawZ;
+        m_pose.vecPosition[0] = headPos.x + (isLeft ? -0.05f : 0.05f) + rawX;
+        m_pose.vecPosition[1] = effectiveHeadY - 0.10f + rawY;
+        m_pose.vecPosition[2] = headPos.z + rawZ;
 
         const Quaternionf& wRot = handData.joints[VISION_JOINT_WRIST].orientation;
         m_pose.qRotation.w = wRot.w;

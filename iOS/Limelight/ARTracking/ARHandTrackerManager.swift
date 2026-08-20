@@ -186,14 +186,23 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        // HMD視野空間における線形正規化3Dマッピング
-        let rawWristX = Float(wristPoint.location.x - 0.5) * Float(0.50)
-        let rawWristY = Float(0.5 - wristPoint.location.y) * Float(0.50)
-        let rawWristZ = Float(0.0)
+        // 📐 手のひらスパン（手首〜中指付け根）によるリアルタイム奥行き深度 Z 推定 (0.20m ~ 0.85m)
+        var handSpan: Float = 0.18
+        if let middleMCP = recognizedPoints[.middleMCP] {
+            let dx = Float(middleMCP.location.x - wristPoint.location.x)
+            let dy = Float(middleMCP.location.y - wristPoint.location.y)
+            handSpan = max(0.04, sqrt(dx*dx + dy*dy))
+        }
+        let estimatedDepth: Float = max(0.20, min(0.85, 0.055 / handSpan))
 
-        // EMA デュアルフィルタ (smooth alpha = 0.28)
+        // HMDカメラ視野空間における真の3D空間座標 (X: 左右, Y: 上下, Z: 前後)
+        let rawWristX = Float(wristPoint.location.x - 0.5) * estimatedDepth * Float(1.35)
+        let rawWristY = Float(0.5 - wristPoint.location.y) * estimatedDepth * Float(1.35)
+        let rawWristZ = -estimatedDepth // カメラ前方 (メートル単位)
+
+        // EMA デュアルフィルタ (smooth alpha = 0.35)
         var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
-        let alpha: Float = 0.28
+        let alpha: Float = 0.35
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
