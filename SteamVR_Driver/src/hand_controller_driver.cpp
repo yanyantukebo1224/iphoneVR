@@ -448,6 +448,45 @@ static int CalculateBoneTransformPositionFromFinger(int finger, int bone_in_fing
     return eBone_IndexFinger0 + finger * 5 + bone_in_finger;
 }
 
+// VMT / Valve Official Knuckles Glove Base Poses (OpenHand and Fist)
+static inline vr::HmdQuaternionf_t SlerpQuat(const vr::HmdQuaternionf_t& q0, const vr::HmdQuaternionf_t& q1, float t) {
+    float dot = q0.w * q1.w + q0.x * q1.x + q0.y * q1.y + q0.z * q1.z;
+    float sign = 1.0f;
+    if (dot < 0.0f) {
+        dot = -dot;
+        sign = -1.0f;
+    }
+
+    if (dot > 0.9995f) {
+        vr::HmdQuaternionf_t result = {
+            q0.w + t * (sign * q1.w - q0.w),
+            q0.x + t * (sign * q1.x - q0.x),
+            q0.y + t * (sign * q1.y - q0.y),
+            q0.z + t * (sign * q1.z - q0.z)
+        };
+        float len = std::sqrt(result.w * result.w + result.x * result.x + result.y * result.y + result.z * result.z);
+        if (len > 0.0001f) {
+            result.w /= len; result.x /= len; result.y /= len; result.z /= len;
+        }
+        return result;
+    }
+
+    float theta_0 = std::acos(dot);
+    float theta = theta_0 * t;
+    float sin_theta = std::sin(theta);
+    float sin_theta_0 = std::sin(theta_0);
+
+    float s0 = std::cos(theta) - dot * sin_theta / sin_theta_0;
+    float s1 = sin_theta / sin_theta_0;
+
+    return {
+        s0 * q0.w + sign * s1 * q1.w,
+        s0 * q0.x + sign * s1 * q1.x,
+        s0 * q0.y + sign * s1 * q1.y,
+        s0 * q0.z + sign * s1 * q1.z
+    };
+}
+
 void HandControllerDriver::ConvertVision21ToSteamVR31(
     const HandPacketData& handData,
     vr::VRBoneTransform_t outBones[31],
@@ -492,11 +531,10 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float splayRing   = handData.splays.ring;
     float splayPinky  = handData.splays.pinky;
 
-    hand.thumb.metacarpal.swing[0] = DEG_TO_RAD(-15.f + curlThumb * 25.f);
-    hand.thumb.metacarpal.swing[1] = DEG_TO_RAD(35.f);
-    hand.thumb.metacarpal.twist = DEG_TO_RAD(60.f);
-
-    hand.thumb.proximal.swing[0] += DEG_TO_RAD(-20.f + curlThumb * 80.f);
+    // VMT Scalar Linear Space: 0.0 (Fist) -> 1.0 (Open Hand)
+    hand.thumb.metacarpal.swing[0] += DEG_TO_RAD(curlThumb * 15.f);
+    hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 10.f);
+    hand.thumb.proximal.swing[0] += DEG_TO_RAD(curlThumb * 80.f);
     hand.thumb.proximal.swing[1] += DEG_TO_RAD(splayThumb * 15.f);
     hand.thumb.distal.rotation += DEG_TO_RAD(curlThumb * 80.f);
 
