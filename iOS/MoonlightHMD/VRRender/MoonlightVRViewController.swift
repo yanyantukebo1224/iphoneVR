@@ -169,7 +169,7 @@ extension MoonlightVRViewController: URLSessionDataDelegate {
         let eoi = Data([0xFF, 0xD9])
 
         while let startRange = receivedBuffer.range(of: soi),
-              let endRange = receivedBuffer.range(of: eoi, range: startRange.upperBound..<receivedBuffer.count) {
+              let endRange = receivedBuffer.range(of: eoi, in: startRange.upperBound..<receivedBuffer.count) {
             
             let frameData = receivedBuffer.subdata(in: startRange.lowerBound..<endRange.upperBound)
             receivedBuffer.removeSubrange(0..<endRange.upperBound)

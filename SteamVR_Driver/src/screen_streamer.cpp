@@ -68,82 +68,70 @@ void ScreenStreamer::CaptureLoop() {
     encoderParams.Parameter[0].Guid = EncoderQuality;
     encoderParams.Parameter[0].Type = EncoderParameterValueTypeLong;
     encoderParams.Parameter[0].NumberOfValues = 1;
-    ULONG quality = 80;
+    ULONG quality = 65;
     encoderParams.Parameter[0].Value = &quality;
+
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+    HDC hdcScreen = GetDC(NULL);
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, screenW, screenH);
+    HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
 
     while (m_running) {
         auto startTime = std::chrono::steady_clock::now();
 
         auto targetHwnd = FindWindowA(NULL, "Headset Window");
-        if (!targetHwnd) {
-            targetHwnd = FindWindowW(NULL, L"VRビュー");
-        }
-        if (!targetHwnd) {
-            targetHwnd = FindWindowA(NULL, "VR View");
-        }
-        if (!targetHwnd) {
-            targetHwnd = FindWindowA("ValveVRUnlitWindow", NULL);
-        }
-        if (!targetHwnd) {
-            targetHwnd = FindWindowA("ValveVRScene", NULL);
-        }
+        if (!targetHwnd) targetHwnd = FindWindowW(NULL, L"VRビュー");
+        if (!targetHwnd) targetHwnd = FindWindowA(NULL, "VR View");
+        if (!targetHwnd) targetHwnd = FindWindowA("ValveVRUnlitWindow", NULL);
+        if (!targetHwnd) targetHwnd = FindWindowA("ValveVRScene", NULL);
 
-        HDC hdcScreen = GetDC(NULL);
-        if (hdcScreen != NULL) {
-            int captureX = 0;
-            int captureY = 0;
-            int captureW = GetSystemMetrics(SM_CXSCREEN);
-            int captureH = GetSystemMetrics(SM_CYSCREEN);
+        int captureX = 0;
+        int captureY = 0;
+        int captureW = screenW;
+        int captureH = screenH;
 
-            if (targetHwnd != NULL && IsWindow(targetHwnd)) {
-                RECT rc;
-                if (GetClientRect(targetHwnd, &rc)) {
-                    POINT pt = { 0, 0 };
-                    ClientToScreen(targetHwnd, &pt);
-                    int w = rc.right - rc.left;
-                    int h = rc.bottom - rc.top;
-                    if (w > 100 && h > 100) {
-                        captureX = pt.x;
-                        captureY = pt.y;
-                        captureW = w;
-                        captureH = h;
-                    }
+        if (targetHwnd != NULL && IsWindow(targetHwnd)) {
+            RECT rc;
+            if (GetClientRect(targetHwnd, &rc)) {
+                POINT pt = { 0, 0 };
+                ClientToScreen(targetHwnd, &pt);
+                int w = rc.right - rc.left;
+                int h = rc.bottom - rc.top;
+                if (w > 100 && h > 100) {
+                    captureX = pt.x;
+                    captureY = pt.y;
+                    captureW = w;
+                    captureH = h;
                 }
             }
+        }
 
-            HDC hdcMem = CreateCompatibleDC(hdcScreen);
-            HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, captureW, captureH);
-            HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
+        // 🖥️ Zero-Overhead Direct Desktop BitBlt Capture
+        BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
 
-            // 🖥️ Direct Desktop BitBlt Capture (100% Guaranteed non-black content)
-            BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
+        Bitmap bitmap(hBitmap, NULL);
+        IStream* pStream = NULL;
+        if (CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
+            if (bitmap.Save(pStream, &jpgClsid, &encoderParams) == Ok) {
+                STATSTG stat;
+                pStream->Stat(&stat, STATFLAG_NONAME);
+                ULONG size = (ULONG)stat.cbSize.QuadPart;
 
-            Bitmap bitmap(hBitmap, NULL);
-            IStream* pStream = NULL;
-            if (CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
-                if (bitmap.Save(pStream, &jpgClsid, &encoderParams) == Ok) {
-                    STATSTG stat;
-                    pStream->Stat(&stat, STATFLAG_NONAME);
-                    ULONG size = (ULONG)stat.cbSize.QuadPart;
+                std::vector<uint8_t> buffer(size);
+                LARGE_INTEGER liZero = { 0 };
+                pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
+                ULONG read = 0;
+                pStream->Read(buffer.data(), size, &read);
 
-                    std::vector<uint8_t> buffer(size);
-                    LARGE_INTEGER liZero = { 0 };
-                    pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
-                    ULONG read = 0;
-                    pStream->Read(buffer.data(), size, &read);
-
-                    {
-                        std::lock_guard<std::mutex> lock(m_frameMutex);
-                        m_latestJpegFrame = std::move(buffer);
-                    }
+                {
+                    std::lock_guard<std::mutex> lock(m_frameMutex);
+                    m_latestJpegFrame = std::move(buffer);
                 }
-                pStream->Release();
             }
-
-            SelectObject(hdcMem, hOldBitmap);
-            DeleteObject(hBitmap);
-            DeleteDC(hdcMem);
-            ReleaseDC(NULL, hdcScreen);
+            pStream->Release();
         }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count();
@@ -152,6 +140,11 @@ void ScreenStreamer::CaptureLoop() {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
         }
     }
+
+    SelectObject(hdcMem, hOldBitmap);
+    DeleteObject(hBitmap);
+    DeleteDC(hdcMem);
+    ReleaseDC(NULL, hdcScreen);
 
     GdiplusShutdown(gdiplusToken);
 }
