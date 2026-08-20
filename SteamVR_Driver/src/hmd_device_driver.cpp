@@ -40,6 +40,7 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_ContainsProximitySensor_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DriverProvidedChaperoneVisibility_Bool, false);
+    vr::VRProperties()->SetUint64Property(m_ulPropertyContainer, vr::Prop_CurrentUniverseId_Uint64, 2);
 
     m_lastVsyncTime = std::chrono::high_resolution_clock::now();
     m_frameCounter = 0;
