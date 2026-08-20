@@ -65,6 +65,11 @@ class GameControllerManager: ObservableObject {
                 let vendor = controller.vendorName ?? "Gamepad"
                 names.append(vendor)
 
+                // IMU センサー (Motion 6DoF) のアクティブ化
+                if let motion = controller.motion {
+                    motion.sensorsActive = true
+                }
+
                 // Nintendo Switch Joy-Con (L) / (R) の自動判別
                 if vendor.lowercased().contains("joy-con (l)") || vendor.lowercased().contains("left") {
                     self.leftController = controller

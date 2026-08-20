@@ -1,0 +1,51 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build iOS Project (Unsigned / Release)
+        run: |
+          cd iOS
+          xcodebuild -project Moonlight.xcodeproj \
+            -scheme "Moonlight" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            -derivedDataPath build \
+            build
+
+      - name: Package IPA
+        run: |
+          cd iOS
+          mkdir -p build/Payload
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
+          if [ -n "$APP_PATH" ]; then
+            cp -r "$APP_PATH" build/Payload/
+            cd build
+            zip -r MoonlightVR.ipa Payload
+          else
+            echo "Error: App bundle not found!"
+            exit 1
+          fi
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoonlightVR-iOS-IPA
+          path: iOS/build/MoonlightVR.ipa

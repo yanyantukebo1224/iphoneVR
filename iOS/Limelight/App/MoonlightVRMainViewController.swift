@@ -94,10 +94,27 @@ struct MoonlightVRMainView: View {
                                         Text("Vision 21-Joint Hand Tracking")
                                             .foregroundColor(.white)
                                             .font(.subheadline)
-                                        Text("Tracks finger bones & pinch gestures for SteamVR controllers")
+                                        Text("Tracks hand 3D position & gestures for SteamVR controllers")
                                             .foregroundColor(.gray)
                                             .font(.caption2)
                                     }
+                                }
+
+                                if vrSettings.isHandTrackingEnabled {
+                                    Toggle(isOn: $vrSettings.isFingerTrackingExperimentalEnabled) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack(spacing: 4) {
+                                                Text("🧪 Experimental Finger Tracking")
+                                                    .foregroundColor(.yellow)
+                                                    .font(.subheadline)
+                                                    .bold()
+                                            }
+                                            Text("Real-time 21-joint skeletal finger tracking (Joy-Con overrides automatically)")
+                                                .foregroundColor(.gray)
+                                                .font(.caption2)
+                                        }
+                                    }
+                                    .padding(.leading, 12)
                                 }
 
                                 Divider().background(Color.gray.opacity(0.3))
