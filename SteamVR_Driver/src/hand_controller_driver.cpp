@@ -526,22 +526,23 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float splayRing   = handData.splays.ring;
     float splayPinky  = handData.splays.pinky;
 
-    // VMT Scalar Linear Space: 0.0 (Fist) -> 1.0 (Open Hand)
-    hand.thumb.metacarpal.swing[0] += DEG_TO_RAD(curlThumb * 10.f);
+    // VMT Scalar Linear Space: 0.0 (Open Hand/パー) -> 1.0 (Fist/グー)
+    // 🖐️ 手のひら内側 (握る方向) へ曲げるため角度を負 (マイナス) に反転！
+    hand.thumb.metacarpal.swing[0] -= DEG_TO_RAD(curlThumb * 10.f);
     hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 10.f);
-    hand.thumb.proximal.swing[0] = DEG_TO_RAD(curlThumb * 45.f);
+    hand.thumb.proximal.swing[0] = -DEG_TO_RAD(curlThumb * 50.f);
     hand.thumb.proximal.swing[1] = DEG_TO_RAD((1.0f - curlThumb) * 35.f + curlThumb * 10.f + splayThumb * 10.f);
-    hand.thumb.distal.rotation = DEG_TO_RAD(curlThumb * 50.f);
+    hand.thumb.distal.rotation = -DEG_TO_RAD(curlThumb * 50.f);
 
     float curls[4] = { curlIndex, curlMiddle, curlRing, curlPinky };
     float splays[4] = { splayIndex, splayMiddle, splayRing, splayPinky };
 
     for (int i = 0; i < 4; ++i) {
-        hand.fingers[i].metacarpal.swing[0] += DEG_TO_RAD(curls[i] * 5.f);
-        hand.fingers[i].proximal.swing[0] = DEG_TO_RAD(curls[i] * 75.f);
+        hand.fingers[i].metacarpal.swing[0] -= DEG_TO_RAD(curls[i] * 5.f);
+        hand.fingers[i].proximal.swing[0] = -DEG_TO_RAD(curls[i] * 75.f);
         hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 10.f);
-        hand.fingers[i].intermediate.rotation = DEG_TO_RAD(curls[i] * 75.f);
-        hand.fingers[i].distal.rotation = DEG_TO_RAD(curls[i] * 65.f);
+        hand.fingers[i].intermediate.rotation = -DEG_TO_RAD(curls[i] * 75.f);
+        hand.fingers[i].distal.rotation = -DEG_TO_RAD(curls[i] * 65.f);
     }
 
     ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.thumb.metacarpal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][0], outBones[eBone_Thumb0]);
