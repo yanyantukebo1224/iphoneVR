@@ -1,1 +1,1 @@
-{"driver_iphonevr": {"enable": true, "serial_number": "iPhoneVR_HMD_001", "model_number": "iPhoneVR HMD"}, "steamvr": {"activateMultipleDrivers": true, "forcedDriver": "driver_iphonevr", "requireHmd": true}}
+{"driver_iphonevr": {"enable": true, "serial_number": "iPhoneVR_HMD_001", "model_number": "iPhoneVR HMD"}, "iphonevr": {"enable": true, "serial_number": "iPhoneVR_HMD_001", "model_number": "iPhoneVR HMD"}, "steamvr": {"activateMultipleDrivers": true, "forcedDriver": "iphonevr", "requireHmd": true}}

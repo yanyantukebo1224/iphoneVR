@@ -1,1 +1,1 @@
-{"alwaysActivate": true, "alwaysShowInStatus": true, "name": "driver_iphonevr", "vrmonitor": "Always", "resourceOnly": false, "hmd_types": ["iphonevr"]}
+{"alwaysActivate": true, "alwaysShowInStatus": true, "name": "iphonevr", "vrmonitor": "Always", "resourceOnly": false, "hmd_types": ["iphonevr"]}
