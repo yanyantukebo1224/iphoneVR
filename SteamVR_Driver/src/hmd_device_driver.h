@@ -37,8 +37,8 @@ public:
 
     // IVRVirtualDisplay (iVRy / ALVR: SteamVR Direct GPU Texture Present)
     virtual void Present(const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize) override;
-    virtual void WaitForPresent() override {}
-    virtual bool GetTimeSinceLastVsync(float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter) override { return false; }
+    virtual void WaitForPresent() override;
+    virtual bool GetTimeSinceLastVsync(float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter) override;
 
     // IVRDisplayComponent
     virtual void GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) override;
@@ -68,6 +68,9 @@ private:
     std::atomic<bool> m_poseThreadRunning{false};
     std::thread m_poseThread;
     void PoseLoop();
+
+    std::chrono::high_resolution_clock::time_point m_lastVsyncTime;
+    uint64_t m_frameCounter{0};
 };
 
 #endif // HMD_DEVICE_DRIVER_H

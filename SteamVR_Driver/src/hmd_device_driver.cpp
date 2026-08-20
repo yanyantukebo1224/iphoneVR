@@ -39,6 +39,10 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_ContainsProximitySensor_Bool, false);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DriverProvidedChaperoneVisibility_Bool, false);
+
+    m_lastVsyncTime = std::chrono::high_resolution_clock::now();
+    m_frameCounter = 0;
 
     UpdateHeadPose(Vector3f{0.0f, 0.0f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
 
@@ -68,9 +72,32 @@ void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
 }
 
 void HMDDeviceDriver::Present(const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize) {
+    m_lastVsyncTime = std::chrono::high_resolution_clock::now();
+    m_frameCounter++;
     if (pPresentInfo && pPresentInfo->backbufferTextureHandle) {
         // GPU Direct Present
     }
+}
+
+void HMDDeviceDriver::WaitForPresent() {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - m_lastVsyncTime).count();
+    const int64_t targetFrameMicroseconds = 16666; // 60 FPS (16.66ms)
+    if (elapsed < targetFrameMicroseconds) {
+        std::this_thread::sleep_for(std::chrono::microseconds(targetFrameMicroseconds - elapsed));
+    }
+}
+
+bool HMDDeviceDriver::GetTimeSinceLastVsync(float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter) {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - m_lastVsyncTime).count();
+    if (pfSecondsSinceLastVsync) {
+        *pfSecondsSinceLastVsync = (float)(elapsed / 1000000.0);
+    }
+    if (pulFrameCounter) {
+        *pulFrameCounter = m_frameCounter;
+    }
+    return true;
 }
 
 void HMDDeviceDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
