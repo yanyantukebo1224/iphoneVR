@@ -90,26 +90,35 @@ class GameControllerManager: ObservableObject {
             return inputData
         }
 
-        // コントローラーの選択: 2台接続時は 0:Left, 1:Right、1台接続時は両手または該当手
         var selectedController: GCController? = nil
         for ctrl in controllers {
             let name = (ctrl.vendorName ?? "").lowercased()
-            if chirality == 0 && (name.contains("joy-con (l)") || name.contains("left")) {
+            if chirality == 0 && (name.contains("joy-con (l)") || name.contains("left") || name.contains("(l)")) {
                 selectedController = ctrl
                 break
-            } else if chirality == 1 && (name.contains("joy-con (r)") || name.contains("right")) {
+            } else if chirality == 1 && (name.contains("joy-con (r)") || name.contains("right") || name.contains("(r)")) {
                 selectedController = ctrl
                 break
             }
         }
 
+        // 単一の汎用ゲームパッド (Xbox/PS/ProCon) の場合
         if selectedController == nil {
-            if chirality == 0 && controllers.count > 1 {
-                selectedController = controllers[0]
-            } else if chirality == 1 && controllers.count > 1 {
-                selectedController = controllers[1]
+            let firstName = (controllers.first?.vendorName ?? "").lowercased()
+            let isStrictRight = firstName.contains("joy-con (r)") || firstName.contains("right") || firstName.contains("(r)")
+            let isStrictLeft = firstName.contains("joy-con (l)") || firstName.contains("left") || firstName.contains("(l)")
+
+            if isStrictRight {
+                if chirality == 1 { selectedController = controllers.first }
+            } else if isStrictLeft {
+                if chirality == 0 { selectedController = controllers.first }
             } else {
-                selectedController = controllers.first
+                // 両手対応の通常ゲームパッド
+                if chirality == 1 {
+                    selectedController = controllers.first
+                } else if controllers.count > 1 {
+                    selectedController = controllers[1]
+                }
             }
         }
 

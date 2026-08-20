@@ -461,13 +461,25 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     hand.role = role;
 
     outBones[eBone_Root] = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } };
-    outBones[eBone_Wrist] = { { -0.034038f, 0.036503f, 0.164722f, 1.0f }, { -0.055147f, -0.078608f, -0.920279f, 0.379296f } };
 
-    if (role == vr::TrackedControllerRole_RightHand) {
-        outBones[eBone_Wrist].position.v[0] *= -1.f;
-        outBones[eBone_Wrist].orientation.y *= -1.f;
-        outBones[eBone_Wrist].orientation.z *= -1.f;
+    // Apply real 3D wrist rotation from iPhone to Skeletal Input eBone_Wrist
+    float wX = handData.joints[VISION_JOINT_WRIST].orientation.x;
+    float wY = handData.joints[VISION_JOINT_WRIST].orientation.y;
+    float wZ = handData.joints[VISION_JOINT_WRIST].orientation.z;
+    float wW = handData.joints[VISION_JOINT_WRIST].orientation.w;
+    if (wW == 0.0f && wX == 0.0f && wY == 0.0f && wZ == 0.0f) {
+        wW = 1.0f;
     }
+
+    outBones[eBone_Wrist].position.v[0] = (role == vr::TrackedControllerRole_RightHand ? 0.034f : -0.034f);
+    outBones[eBone_Wrist].position.v[1] = 0.036f;
+    outBones[eBone_Wrist].position.v[2] = 0.164f;
+    outBones[eBone_Wrist].position.v[3] = 1.0f;
+
+    outBones[eBone_Wrist].orientation.w = wW;
+    outBones[eBone_Wrist].orientation.x = wX;
+    outBones[eBone_Wrist].orientation.y = wY;
+    outBones[eBone_Wrist].orientation.z = wZ;
 
     for (auto& finger : hand.fingers) {
         finger.proximal.swing[1] = DEG_TO_RAD(10.f);
