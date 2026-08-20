@@ -41,16 +41,18 @@ struct ContentView: View {
     let streamer: BinaryUDPStreamer
     @Binding var targetIP: String
 
+    @ObservedObject var vrSettings = VRSettingsManager.shared
+    @ObservedObject var gcManager = GameControllerManager.shared
+
     @State private var isStreaming = false
     @State private var cameraPermissionGranted = false
     @State private var errorMessage: String? = nil
 
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
+            Color(red: 0.07, green: 0.08, blue: 0.12).edgesIgnoringSafeArea(.all)
 
             if isStreaming {
-                // 18:44 時点で最も正常動作していた 2眼 VR ストリーミング＆トラッキング統合ビュー
                 ZStack(alignment: .topLeading) {
                     VRStreamViewControllerRepresentable()
                         .edgesIgnoringSafeArea(.all)
@@ -60,20 +62,26 @@ struct ContentView: View {
                             Circle()
                                 .fill(Color.green)
                                 .frame(width: 8, height: 8)
-                            Text("MOONLIGHT VR STREAM & 6DOF ACTIVE")
+                            Text("MOONLIGHT VR 6DoF ACTIVE")
                                 .font(.caption)
                                 .foregroundColor(.green)
                                 .bold()
                         }
-                        Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
+                        Text("Head: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
                             .font(.caption2)
                             .foregroundColor(.white)
-                        Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked" : "Searching...")")
+                        Text("Left: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked (3D)" : "Searching...")")
                             .font(.caption2)
                             .foregroundColor(.gray)
-                        Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked" : "Searching...")")
+                        Text("Right: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked (3D)" : "Searching...")")
                             .font(.caption2)
                             .foregroundColor(.gray)
+                        Text("Joy-Con: \(gcManager.isConnected ? "Connected (Primary)" : "None")")
+                            .font(.caption2)
+                            .foregroundColor(gcManager.isConnected ? .cyan : .gray)
+                        Text("Finger Tracking: \(vrSettings.isFingerTrackingExperimentalEnabled ? "🧪 Experimental ON" : "Off (Controller Driven)")")
+                            .font(.caption2)
+                            .foregroundColor(vrSettings.isFingerTrackingExperimentalEnabled ? .yellow : .gray)
                     }
                     .padding(10)
                     .background(Color.black.opacity(0.75))
@@ -99,73 +107,109 @@ struct ContentView: View {
                     }
                 }
             } else {
-                VStack(spacing: 22) {
-                    VStack(spacing: 6) {
-                        Text("Moonlight Native VR HMD")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .bold()
-                        Text("Sunshine / GameStream Low-Latency Streamer")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Target Host PC Address:")
+                ScrollView {
+                    VStack(spacing: 20) {
+                        VStack(spacing: 6) {
+                            Text("Moonlight VR HMD")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .bold()
+                            Text("6DoF Head & 3D Hand Controller Tracking")
                                 .font(.caption)
                                 .foregroundColor(.gray)
-                            TextField("192.168.x.x", text: $targetIP)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .keyboardType(.decimalPad)
-                                .frame(width: 260)
                         }
 
-                        Button(action: requestCameraAndStart) {
-                            HStack {
-                                Image(systemName: "play.fill")
-                                Text("Connect & Start VR HMD")
-                                    .font(.headline)
+                        // 設定カード
+                        VStack(alignment: .leading, spacing: 14) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("SteamVR Host PC IP Address:")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                TextField("192.168.x.x", text: $vrSettings.targetIP)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .keyboardType(.decimalPad)
                             }
-                            .padding()
-                            .frame(width: 260)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+
+                            Divider().background(Color.gray.opacity(0.3))
+
+                            Toggle(isOn: $vrSettings.isHandTrackingEnabled) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Vision 3D Hand Tracking")
+                                        .foregroundColor(.white)
+                                        .font(.subheadline)
+                                    Text("Tracks 3D position & wrist orientation via camera")
+                                        .foregroundColor(.gray)
+                                        .font(.caption2)
+                                }
+                            }
+
+                            if vrSettings.isHandTrackingEnabled {
+                                Toggle(isOn: $vrSettings.isFingerTrackingExperimentalEnabled) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("🧪 実験的フィンガートラッキング")
+                                            .foregroundColor(.yellow)
+                                            .font(.subheadline)
+                                            .bold()
+                                        Text("21関節リアルタイム骨格追従 (Joy-Con接続時は物理操作が自動優先)")
+                                            .foregroundColor(.gray)
+                                            .font(.caption2)
+                                    }
+                                }
+                                .padding(.leading, 8)
+                            }
+
+                            Divider().background(Color.gray.opacity(0.3))
+
+                            Button(action: requestCameraAndStart) {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text("Connect & Start VR HMD")
+                                        .font(.headline)
+                                        .bold()
+                                }
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
                         }
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(16)
+                        .padding()
+                        .background(Color.white.opacity(0.08))
+                        .cornerRadius(16)
+                        .padding(.horizontal)
 
-                    if let err = errorMessage {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(.horizontal)
-                    }
+                        if let err = errorMessage {
+                            Text(err)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(.horizontal)
+                        }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Moonlight Engine Status:")
-                            .foregroundColor(.yellow)
-                            .font(.caption)
-                            .bold()
-                        Text("• VideoToolbox H.264/HEVC Decoder: Ready")
-                            .foregroundColor(.white)
-                            .font(.caption2)
-                        Text("• ARKit 6DoF + Vision 21-Joint Tracker: Ready")
-                            .foregroundColor(.white)
-                            .font(.caption2)
-                        Text("• Camera Permission: \(cameraPermissionGranted ? "Granted" : "Pending Approval")")
-                            .foregroundColor(cameraPermissionGranted ? .green : .orange)
-                            .font(.caption2)
+                        // ステータスカード
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("System & Hardware Status:")
+                                .foregroundColor(.yellow)
+                                .font(.caption)
+                                .bold()
+                            Text("• Gamepad: \(gcManager.controllerStatusDescription)")
+                                .foregroundColor(gcManager.isConnected ? .cyan : .white)
+                                .font(.caption2)
+                            Text("• ARKit 6DoF Engine: Active (Gravity Aligned)")
+                                .foregroundColor(.green)
+                                .font(.caption2)
+                            Text("• Camera Access: \(cameraPermissionGranted ? "Authorized" : "Pending")")
+                                .foregroundColor(cameraPermissionGranted ? .green : .orange)
+                                .font(.caption2)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(10)
+                        .padding(.horizontal)
                     }
-                    .padding()
-                    .frame(width: 280, alignment: .leading)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(10)
+                    .padding(.vertical)
                 }
-                .padding()
             }
         }
         .onAppear {
@@ -224,7 +268,8 @@ struct ContentView: View {
         } else {
             errorMessage = nil
             UIApplication.shared.isIdleTimerDisabled = true
-            streamer.connect(targetIP: targetIP, port: 9050)
+            let port = UInt16(vrSettings.udpPort) ?? 9050
+            streamer.connect(targetIP: vrSettings.targetIP, port: port)
             trackerManager.startTracking()
             isStreaming = true
         }

@@ -17,11 +17,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     private var isLeftPinchingState: Bool = false
     private var isRightPinchingState: Bool = false
 
-    private var prevLeftWristPos: SIMD3<Float> = .zero
-    private var prevRightWristPos: SIMD3<Float> = .zero
+    private var prevLeftLocalPos: SIMD3<Float> = SIMD3<Float>(-0.18, -0.15, -0.45)
+    private var prevRightLocalPos: SIMD3<Float> = SIMD3<Float>(0.18, -0.15, -0.45)
 
-    private var prevLeftWristQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
-    private var prevRightWristQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
+    private var prevLeftLocalQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
+    private var prevRightLocalQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
 
     private var prevLeftCurls = FingerCurls()
     private var prevRightCurls = FingerCurls()
@@ -158,26 +158,22 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         isExpFinger: Bool
     ) {
         if input.isConnected == 1 {
-            // 🎮 Joy-Con接続時：物理操作を最優先！
-            // カメラによるピンチ・ジェスチャー誤爆を完全無効化
+            // Joy-Con接続時：物理操作を最優先
             handData.isPinching = 0
             handData.pinchDistance = 1.0
 
-            // Joy-Con内蔵IMUの回転クォータニオンが存在する場合、手首姿勢に最優先適用
             let cRot = input.controllerRot
             if (cRot.w != 1.0 || cRot.x != 0.0 || cRot.y != 0.0 || cRot.z != 0.0) && (cRot.w != 0.0 || cRot.x != 0.0 || cRot.y != 0.0 || cRot.z != 0.0) {
                 handData.joints.0.orientation = cRot
             }
 
             if !isExpFinger {
-                // 通常操作モード：コントローラーのボタン・トリガー・グリップに連動する高品位指アニメーション
                 handData.curls = generateControllerCurls(input: input, isLeft: isLeft)
                 handData.splays = generateControllerSplays(input: input, isLeft: isLeft)
             }
         } else {
-            // 🖐️ Joy-Con非接続時（ハンドトラッキング単体モード）
+            // Joy-Con非接続時（ハンドトラッキング単体）
             if !isExpFinger {
-                // 実験的フィンガーOFF時：ピンチや握りジェスチャーに応じた安定ポーズ
                 if handData.isPinching == 1 {
                     handData.curls.thumb = 0.70
                     handData.curls.index = 0.75
@@ -185,7 +181,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
                     handData.curls.ring = 0.20
                     handData.curls.pinky = 0.20
                 } else if handData.curls.middle > 0.65 && handData.curls.ring > 0.65 {
-                    // グー（握り）
                     handData.curls.thumb = 0.80
                     handData.curls.index = 0.85
                     handData.curls.middle = 0.90
@@ -224,7 +219,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let defaultPos = Vector3f(
             x: isLeft ? -0.18 : 0.18,
             y: -0.15,
-            z: -0.42
+            z: -0.45
         )
         let wristBone = BoneTransform(position: defaultPos, orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
@@ -252,7 +247,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         let isLeft = (chirality == 0)
 
-        // 1. ピンチ検出（親指先端と人差し指先端のユークリッド距離）
+        // 1. ピンチ判定
         var isPinching: UInt32 = 0
         var pinchDist: Float = 1.0
         var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
@@ -276,33 +271,33 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        // 2. 手首位置の3D追従とスムージング
-        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(1.20)
-        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(1.50)
-
-        let basePosX: Float = isLeft ? -0.18 : 0.18
-        let basePosY: Float = -0.08
-        let basePosZ: Float = -0.68
-
-        let rawX = basePosX + deltaX
-        let rawY = basePosY + deltaY
-        let rawZ = basePosZ
-
-        var targetWrist = SIMD3<Float>(rawX, rawY, rawZ)
-        let alpha: Float = 0.55
-        if isLeft {
-            targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
-            prevLeftWristPos = targetWrist
-        } else {
-            targetWrist = prevRightWristPos * (1.0 - alpha) + targetWrist * alpha
-            prevRightWristPos = targetWrist
-        }
-
-        // 3. 手首の3D回転クォータニオン（3軸直交基底ベクトルによる高精度幾何学計算）
-        var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
-
+        // 2. 光学逆投影と動的Depthによるカメラローカル3D位置（Position）の算出
         let wx = Float(wristPoint.location.x)
         let wy = Float(wristPoint.location.y)
+
+        // 手のひらサイズからカメラからの奥行き距離（Depth: 0.25m〜0.85m）を動的実測
+        var palmScale: Float = 0.15
+        if let midMCP = recognizedPoints[.middleMCP] {
+            let pdx = Float(midMCP.location.x) - wx
+            let pdy = Float(midMCP.location.y) - wy
+            palmScale = max(0.04, hypot(pdx, pdy))
+        }
+        let dynamicDepth: Float = max(0.25, min(0.85, 0.065 / palmScale))
+
+        // カメラローカル座標系 (X: 右, Y: 上, Z: 前方マイナス)
+        let fovFactor: Float = 1.15
+        let localX: Float = (wx - 0.5) * dynamicDepth * fovFactor + (isLeft ? -0.05 : 0.05)
+        let localY: Float = (wy - 0.5) * dynamicDepth * fovFactor - 0.05
+        let localZ: Float = -dynamicDepth
+
+        var rawLocalPos = SIMD3<Float>(localX, localY, localZ)
+        let posAlpha: Float = 0.65
+        let prevPos = isLeft ? prevLeftLocalPos : prevRightLocalPos
+        let smoothLocalPos = prevPos * (1.0 - posAlpha) + rawLocalPos * posAlpha
+        if isLeft { prevLeftLocalPos = smoothLocalPos } else { prevRightLocalPos = smoothLocalPos }
+
+        // 3. 手のひら3軸直交基底による手首ローカル3D回転（Rotation）の算出
+        var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
 
         let midMCP = recognizedPoints[.middleMCP]
         let idxMCP = recognizedPoints[.indexMCP]
@@ -310,31 +305,27 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         if let mid = midMCP, let idx = idxMCP, let lit = litMCP {
             // 前方ベクトル: 手首 -> 中指付け根
-            let fwd2D = SIMD2<Float>(Float(mid.location.x) - wx, Float(mid.location.y) - wy)
-            let fwdLen = max(0.001, hypot(fwd2D.x, fwd2D.y))
-            let fwdNorm = fwd2D / fwdLen
+            let fwdX = Float(mid.location.x) - wx
+            let fwdY = Float(mid.location.y) - wy
+            let fwdLen = max(0.001, hypot(fwdX, fwdY))
+            let vFwd = SIMD3<Float>(fwdX / fwdLen, fwdY / fwdLen, -0.25)
 
             // 横ベクトル: 人差し指MCP -> 小指MCP
-            let right2D = SIMD2<Float>(Float(lit.location.x - idx.location.x), Float(lit.location.y - idx.location.y))
-            let rightLen = max(0.001, hypot(right2D.x, right2D.y))
-            let rightNorm = (isLeft ? -right2D : right2D) / rightLen
+            let rX = Float(lit.location.x - idx.location.x)
+            let rY = Float(lit.location.y - idx.location.y)
+            let rLen = max(0.001, hypot(rX, rY))
+            let vRight = SIMD3<Float>((isLeft ? -rX : rX) / rLen, (isLeft ? -rY : rY) / rLen, 0.20)
 
-            // 手のひら法線（外積）
-            let normalZ = fwdNorm.x * rightNorm.y - fwdNorm.y * rightNorm.x
+            // 法線ベクトル (外積)
+            let vUp = simd_normalize(simd_cross(vRight, vFwd))
+            let vFwdOrtho = simd_normalize(simd_cross(vUp, vRight))
+            let vRightOrtho = simd_normalize(simd_cross(vFwdOrtho, vUp))
 
-            // 3D直交座標系ベクトル
-            let vForward = SIMD3<Float>(fwdNorm.x, fwdNorm.y, -0.3)
-            let vRight = SIMD3<Float>(rightNorm.x, rightNorm.y, normalZ * 0.4)
-            let vUp = simd_normalize(simd_cross(vRight, vForward))
-            let vForwardOrtho = simd_normalize(simd_cross(vUp, vRight))
-            let vRightOrtho = simd_normalize(vRight)
-
-            // 3x3 回転行列からクォータニオンを合成
             let rotMatrix = simd_float3x3(
                 columns: (
                     SIMD3<Float>(vRightOrtho.x, vRightOrtho.y, vRightOrtho.z),
                     SIMD3<Float>(vUp.x, vUp.y, vUp.z),
-                    SIMD3<Float>(vForwardOrtho.x, vForwardOrtho.y, vForwardOrtho.z)
+                    SIMD3<Float>(vFwdOrtho.x, vFwdOrtho.y, vFwdOrtho.z)
                 )
             )
             var currentQuat = simd_quatf(rotMatrix)
@@ -342,14 +333,9 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
                 currentQuat = simd_quatf(real: 1, imag: .zero)
             }
 
-            // 回転のスムージング（急激な反転防止）
-            let prevQuat = isLeft ? prevLeftWristQuat : prevRightWristQuat
-            let smoothQuat = simd_slerp(prevQuat, currentQuat, 0.45)
-            if isLeft {
-                prevLeftWristQuat = smoothQuat
-            } else {
-                prevRightWristQuat = smoothQuat
-            }
+            let prevQuat = isLeft ? prevLeftLocalQuat : prevRightLocalQuat
+            let smoothQuat = simd_slerp(prevQuat, currentQuat, 0.50)
+            if isLeft { prevLeftLocalQuat = smoothQuat } else { prevRightLocalQuat = smoothQuat }
 
             wristQuat = Quaternionf(
                 w: smoothQuat.real,
@@ -362,8 +348,9 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
+        // bones[0] にカメラローカルな手首相対位置と相対姿勢を格納
         bones[0] = BoneTransform(
-            position: Vector3f(x: targetWrist.x, y: targetWrist.y, z: targetWrist.z),
+            position: Vector3f(x: smoothLocalPos.x, y: smoothLocalPos.y, z: smoothLocalPos.z),
             orientation: wristQuat
         )
 
@@ -388,7 +375,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             }
         }
 
-        // 4. 幾何学的関節屈曲角 (Geometric Joint Flexion Angle) による実用Curl計算
+        // 4. 幾何学的関節屈曲角による実用Curl計算
         let computeGeometricCurl = { (mcpKey: VNHumanHandPoseObservation.JointName,
                                       pipKey: VNHumanHandPoseObservation.JointName,
                                       dipKey: VNHumanHandPoseObservation.JointName,
@@ -409,10 +396,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             let dot1 = max(-1.0, min(1.0, (v1.x * v2.x + v1.y * v2.y) / (len1 * len2)))
             let dot2 = max(-1.0, min(1.0, (v2.x * v3.x + v2.y * v3.y) / (len2 * len3)))
 
-            let angle1 = acos(dot1) // 0〜π
-            let angle2 = acos(dot2) // 0〜π
-
-            let totalAngle = angle1 + angle2
+            let totalAngle = acos(dot1) + acos(dot2)
             let normalizedCurl = totalAngle / (Float.pi * 0.85)
             return max(0.0, min(1.0, normalizedCurl))
         }
@@ -436,8 +420,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             let dot2 = max(-1.0, min(1.0, (v2.x * v3.x + v2.y * v3.y) / (len2 * len3)))
 
             let angle = acos(dot1) + acos(dot2)
-
-            // 対向（人差し指付け根への接近）
             let distToIndex = hypot(Float(tip.location.x - idxMCP.location.x), Float(tip.location.y - idxMCP.location.y))
             let opposition = max(0.0, min(1.0, (0.16 - distToIndex) / 0.10))
 
@@ -452,7 +434,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         rawCurls.ring = computeGeometricCurl(.ringMCP, .ringPIP, .ringDIP, .ringTip)
         rawCurls.pinky = computeGeometricCurl(.littleMCP, .littlePIP, .littleDIP, .littleTip)
 
-        // ジッター除去フィルタ（EMA）
         var prevC = isLeft ? prevLeftCurls : prevRightCurls
         let cAlpha: Float = 0.60
         var smoothCurls = FingerCurls(

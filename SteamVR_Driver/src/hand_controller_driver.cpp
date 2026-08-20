@@ -343,12 +343,12 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     dummyHand.isTracked = 1;
     dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{0.0f, 0.0f, 0.0f};
 
-    UpdateHandPose(dummyHand, Vector3f{0.0f, 1.65f, 0.0f});
+    UpdateHandPose(dummyHand, Vector3f{0.0f, 1.65f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
 
     return vr::VRInitError_None;
 }
 
-void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos) {
+void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos, const Quaternionf& headRot) {
     m_pose.poseIsValid = true;
     m_pose.deviceIsConnected = true;
     m_pose.result = vr::TrackingResult_Running_OK;
@@ -356,69 +356,54 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.qDriverFromHeadRotation = { 1.0, 0.0, 0.0, 0.0 };
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
-    float effectiveHeadY = (headPos.y < 1.0f) ? 1.65f : headPos.y;
+    float effectiveHeadY = (headPos.y < 0.5f) ? 1.65f : headPos.y;
 
-    float defaultOffsetX = isLeft ? -0.20f : 0.20f;
-    float defaultOffsetY = -0.25f;
-    float defaultOffsetZ = -0.35f;
+    vr::HmdQuaternion_t qHead = { (double)headRot.w, (double)headRot.x, (double)headRot.y, (double)headRot.z };
+    if (qHead.w == 0.0 && qHead.x == 0.0 && qHead.y == 0.0 && qHead.z == 0.0) {
+        qHead = { 1.0, 0.0, 0.0, 0.0 };
+    }
 
-    float rawX = handData.joints[VISION_JOINT_WRIST].position.x;
-    float rawY = handData.joints[VISION_JOINT_WRIST].position.y;
-    float rawZ = handData.joints[VISION_JOINT_WRIST].position.z;
-
-    if (rawX != rawX) rawX = 0.0f;
-    if (rawY != rawY) rawY = 0.0f;
-    if (rawZ != rawZ) rawZ = 0.0f;
-
+    vr::HmdVector3_t localOffset;
     auto now = std::chrono::steady_clock::now();
 
     if (handData.isTracked == 1) {
         m_lastMovementTime = now;
-        m_lastPosition[0] = rawX;
-        m_lastPosition[1] = rawY;
-        m_lastPosition[2] = rawZ;
+        localOffset.v[0] = handData.joints[VISION_JOINT_WRIST].position.x;
+        localOffset.v[1] = handData.joints[VISION_JOINT_WRIST].position.y;
+        localOffset.v[2] = handData.joints[VISION_JOINT_WRIST].position.z;
+    } else {
+        // Default controller position in front of HMD
+        localOffset.v[0] = isLeft ? -0.20f : 0.20f;
+        localOffset.v[1] = -0.20f;
+        localOffset.v[2] = -0.40f;
+    }
 
-        m_pose.vecPosition[0] = headPos.x + (isLeft ? -0.05f : 0.05f) + rawX;
-        m_pose.vecPosition[1] = effectiveHeadY - 0.10f + rawY;
-        m_pose.vecPosition[2] = headPos.z + rawZ;
+    // Transform camera-local position to world space using HMD head rotation
+    vr::HmdVector3_t worldOffset = QuatRotateVec(localOffset, qHead);
+    m_pose.vecPosition[0] = headPos.x + worldOffset.v[0];
+    m_pose.vecPosition[1] = effectiveHeadY + worldOffset.v[1];
+    m_pose.vecPosition[2] = headPos.z + worldOffset.v[2];
 
-        // 手首回転の決定 (Joy-Con接続時はIMU回転、ハンドトラッキング時は幾何学算出クォータニオン)
-        Quaternionf finalRot = handData.joints[VISION_JOINT_WRIST].orientation;
-        if (handData.controller.isConnected == 1) {
-            const Quaternionf& cRot = handData.controller.controllerRot;
-            if ((cRot.w != 1.0f || cRot.x != 0.0f || cRot.y != 0.0f || cRot.z != 0.0f) &&
-                (cRot.w != 0.0f || cRot.x != 0.0f || cRot.y != 0.0f || cRot.z != 0.0f)) {
-                finalRot = cRot;
-            }
-        }
-
-        if (finalRot.w != 0.0f || finalRot.x != 0.0f || finalRot.y != 0.0f || finalRot.z != 0.0f) {
-            m_pose.qRotation.w = finalRot.w;
-            m_pose.qRotation.x = finalRot.x;
-            m_pose.qRotation.y = finalRot.y;
-            m_pose.qRotation.z = finalRot.z;
+    // Compute rotation
+    if (handData.controller.isConnected == 1) {
+        // Joy-Con IMU attitude priority
+        const Quaternionf& cRot = handData.controller.controllerRot;
+        if (cRot.w != 0.0f || cRot.x != 0.0f || cRot.y != 0.0f || cRot.z != 0.0f) {
+            m_pose.qRotation.w = cRot.w;
+            m_pose.qRotation.x = cRot.x;
+            m_pose.qRotation.y = cRot.y;
+            m_pose.qRotation.z = cRot.z;
         } else {
-            m_pose.qRotation = { 1.0, 0.0, 0.0, 0.0 };
+            m_pose.qRotation = qHead;
         }
     } else {
-        auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastMovementTime).count();
-        if (elapsedMs > 500) {
-            m_pose.vecPosition[0] = headPos.x + defaultOffsetX;
-            m_pose.vecPosition[1] = effectiveHeadY + defaultOffsetY;
-            m_pose.vecPosition[2] = headPos.z + defaultOffsetZ;
-
-            if (handData.controller.isConnected == 1) {
-                const Quaternionf& cRot = handData.controller.controllerRot;
-                if (cRot.w != 0.0f || cRot.x != 0.0f || cRot.y != 0.0f || cRot.z != 0.0f) {
-                    m_pose.qRotation.w = cRot.w;
-                    m_pose.qRotation.x = cRot.x;
-                    m_pose.qRotation.y = cRot.y;
-                    m_pose.qRotation.z = cRot.z;
-                }
-            } else {
-                m_pose.qRotation = { 1.0, 0.0, 0.0, 0.0 };
-            }
+        // Camera hand tracking: combine head rotation with local hand orientation
+        const Quaternionf& hRot = handData.joints[VISION_JOINT_WRIST].orientation;
+        vr::HmdQuaternion_t qLocalHand = { (double)hRot.w, (double)hRot.x, (double)hRot.y, (double)hRot.z };
+        if (qLocalHand.w == 0.0 && qLocalHand.x == 0.0 && qLocalHand.y == 0.0 && qLocalHand.z == 0.0) {
+            qLocalHand = { 1.0, 0.0, 0.0, 0.0 };
         }
+        m_pose.qRotation = QuatMultiply(qHead, qLocalHand);
     }
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {

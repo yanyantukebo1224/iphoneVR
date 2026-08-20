@@ -33,10 +33,10 @@ public:
                 m_pHmdDriver->UpdateHeadPose(packet.headPosition, packet.headRotation);
             }
             if (m_pLeftHandDriver) {
-                m_pLeftHandDriver->UpdateHandPose(packet.hands[0], packet.headPosition);
+                m_pLeftHandDriver->UpdateHandPose(packet.hands[0], packet.headPosition, packet.headRotation);
             }
             if (m_pRightHandDriver) {
-                m_pRightHandDriver->UpdateHandPose(packet.hands[1], packet.headPosition);
+                m_pRightHandDriver->UpdateHandPose(packet.hands[1], packet.headPosition, packet.headRotation);
             }
 
             // Debug log tracking packets every 1 second

@@ -18,7 +18,7 @@ public:
     virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
     virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
-    void UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos);
+    void UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos, const Quaternionf& headRot);
     
     static void ConvertVision21ToSteamVR31(
         const HandPacketData& handData,
