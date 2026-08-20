@@ -1,0 +1,48 @@
+name: iOS App Build (MangaYaro)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build MangaYaro for iOS
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Build iOS Application
+        run: |
+          xcodebuild \
+            -project MangaYaro.xcodeproj \
+            -scheme MangaYaro \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build
+
+      - name: Package App Bundle
+        run: |
+          mkdir -p build/Artifacts
+          if [ -d "build/Release-iphoneos/MangaYaro.app" ]; then
+            cp -r build/Release-iphoneos/MangaYaro.app build/Artifacts/
+          fi
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MangaYaro-iOS-Build
+          path: build/Release-iphoneos/
+          if-no-files-found: ignore

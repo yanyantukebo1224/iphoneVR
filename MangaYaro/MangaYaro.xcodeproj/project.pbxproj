@@ -1,0 +1,359 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000012C12345600000001 /* MangaYaroApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000012C12345600000001 /* MangaYaroApp.swift */; };
+		A10000022C12345600000001 /* Manga.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000022C12345600000001 /* Manga.swift */; };
+		A10000032C12345600000001 /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000032C12345600000001 /* Chapter.swift */; };
+		A10000042C12345600000001 /* Page.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000042C12345600000001 /* Page.swift */; };
+		A10000052C12345600000001 /* PageCacheManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000052C12345600000001 /* PageCacheManager.swift */; };
+		A10000062C12345600000001 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000062C12345600000001 /* RateLimiter.swift */; };
+		A10000072C12345600000001 /* ColorExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000072C12345600000001 /* ColorExtractor.swift */; };
+		A10000082C12345600000001 /* MockDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000082C12345600000001 /* MockDataService.swift */; };
+		A10000092C12345600000001 /* PageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000092C12345600000001 /* PageView.swift */; };
+		A100000A2C12345600000001 /* ReaderQuickSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000A2C12345600000001 /* ReaderQuickSlider.swift */; };
+		A100000B2C12345600000001 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000B2C12345600000001 /* ReaderView.swift */; };
+		A100000C2C12345600000001 /* MangaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000C2C12345600000001 /* MangaDetailView.swift */; };
+		A100000D2C12345600000001 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000D2C12345600000001 /* LibraryView.swift */; };
+		A100000E2C12345600000001 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000E2C12345600000001 /* DiscoverView.swift */; };
+		A100000F2C12345600000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B100000F2C12345600000001 /* SettingsView.swift */; };
+		A10000102C12345600000001 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000102C12345600000001 /* MainTabView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		C10000012C12345600000001 /* MangaYaro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MangaYaro.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000012C12345600000001 /* MangaYaroApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaYaroApp.swift; sourceTree = "<group>"; };
+		B10000022C12345600000001 /* Manga.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manga.swift; sourceTree = "<group>"; };
+		B10000032C12345600000001 /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
+		B10000042C12345600000001 /* Page.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Page.swift; sourceTree = "<group>"; };
+		B10000052C12345600000001 /* PageCacheManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageCacheManager.swift; sourceTree = "<group>"; };
+		B10000062C12345600000001 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
+		B10000072C12345600000001 /* ColorExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorExtractor.swift; sourceTree = "<group>"; };
+		B10000082C12345600000001 /* MockDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDataService.swift; sourceTree = "<group>"; };
+		B10000092C12345600000001 /* PageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageView.swift; sourceTree = "<group>"; };
+		B100000A2C12345600000001 /* ReaderQuickSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderQuickSlider.swift; sourceTree = "<group>"; };
+		B100000B2C12345600000001 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
+		B100000C2C12345600000001 /* MangaDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaDetailView.swift; sourceTree = "<group>"; };
+		B100000D2C12345600000001 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		B100000E2C12345600000001 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
+		B100000F2C12345600000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B10000102C12345600000001 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D10000012C12345600000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E10000012C12345600000001 = {
+			isa = PBXGroup;
+			children = (
+				E10000022C12345600000001 /* MangaYaro */,
+				C10000012C12345600000001 /* MangaYaro.app */,
+			);
+			sourceTree = "<group>";
+		};
+		E10000022C12345600000001 /* MangaYaro */ = {
+			isa = PBXGroup;
+			children = (
+				B10000012C12345600000001 /* MangaYaroApp.swift */,
+				E10000032C12345600000001 /* Models */,
+				E10000042C12345600000001 /* Services */,
+				E10000052C12345600000001 /* Views */,
+			);
+			path = MangaYaro;
+			sourceTree = "<group>";
+		};
+		E10000032C12345600000001 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B10000022C12345600000001 /* Manga.swift */,
+				B10000032C12345600000001 /* Chapter.swift */,
+				B10000042C12345600000001 /* Page.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		E10000042C12345600000001 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B10000052C12345600000001 /* PageCacheManager.swift */,
+				B10000062C12345600000001 /* RateLimiter.swift */,
+				B10000072C12345600000001 /* ColorExtractor.swift */,
+				B10000082C12345600000001 /* MockDataService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		E10000052C12345600000001 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B10000102C12345600000001 /* MainTabView.swift */,
+				E10000062C12345600000001 /* Reader */,
+				E10000072C12345600000001 /* Detail */,
+				E10000082C12345600000001 /* Library */,
+				E10000092C12345600000001 /* Discover */,
+				E100000A2C12345600000001 /* Settings */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		E10000062C12345600000001 /* Reader */ = {
+			isa = PBXGroup;
+			children = (
+				B10000092C12345600000001 /* PageView.swift */,
+				B100000A2C12345600000001 /* ReaderQuickSlider.swift */,
+				B100000B2C12345600000001 /* ReaderView.swift */,
+			);
+			path = Reader;
+			sourceTree = "<group>";
+		};
+		E10000072C12345600000001 /* Detail */ = {
+			isa = PBXGroup;
+			children = (
+				B100000C2C12345600000001 /* MangaDetailView.swift */,
+			);
+			path = Detail;
+			sourceTree = "<group>";
+		};
+		E10000082C12345600000001 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				B100000D2C12345600000001 /* LibraryView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		E10000092C12345600000001 /* Discover */ = {
+			isa = PBXGroup;
+			children = (
+				B100000E2C12345600000001 /* DiscoverView.swift */,
+			);
+			path = Discover;
+			sourceTree = "<group>";
+		};
+		E100000A2C12345600000001 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				B100000F2C12345600000001 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F10000012C12345600000001 /* MangaYaro */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = G10000012C12345600000001 /* Build configuration list for PBXNativeTarget "MangaYaro" */;
+			buildPhases = (
+				H10000012C12345600000001 /* Sources */,
+				D10000012C12345600000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MangaYaro;
+			productName = MangaYaro;
+			productReference = C10000012C12345600000001 /* MangaYaro.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		I10000012C12345600000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					F10000012C12345600000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = G10000022C12345600000001 /* Build configuration list for PBXProject "MangaYaro" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E10000012C12345600000001;
+			productRefGroup = E10000012C12345600000001;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F10000012C12345600000001 /* MangaYaro */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		H10000012C12345600000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000012C12345600000001 /* MangaYaroApp.swift in Sources */,
+				A10000022C12345600000001 /* Manga.swift in Sources */,
+				A10000032C12345600000001 /* Chapter.swift in Sources */,
+				A10000042C12345600000001 /* Page.swift in Sources */,
+				A10000052C12345600000001 /* PageCacheManager.swift in Sources */,
+				A10000062C12345600000001 /* RateLimiter.swift in Sources */,
+				A10000072C12345600000001 /* ColorExtractor.swift in Sources */,
+				A10000082C12345600000001 /* MockDataService.swift in Sources */,
+				A10000092C12345600000001 /* PageView.swift in Sources */,
+				A100000A2C12345600000001 /* ReaderQuickSlider.swift in Sources */,
+				A100000B2C12345600000001 /* ReaderView.swift in Sources */,
+				A100000C2C12345600000001 /* MangaDetailView.swift in Sources */,
+				A100000D2C12345600000001 /* LibraryView.swift in Sources */,
+				A100000E2C12345600000001 /* DiscoverView.swift in Sources */,
+				A100000F2C12345600000001 /* SettingsView.swift in Sources */,
+				A10000102C12345600000001 /* MainTabView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		J10000012C12345600000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_IDENTITY = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mangayaro.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		J10000022C12345600000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_IDENTITY = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mangayaro.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		J10000032C12345600000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		J10000042C12345600000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		G10000012C12345600000001 /* Build configuration list for PBXNativeTarget "MangaYaro" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				J10000012C12345600000001 /* Debug */,
+				J10000022C12345600000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		G10000022C12345600000001 /* Build configuration list for PBXProject "MangaYaro" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				J10000032C12345600000001 /* Debug */,
+				J10000042C12345600000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = I10000012C12345600000001 /* Project object */;
+}
