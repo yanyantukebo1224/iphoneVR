@@ -290,7 +290,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let localY: Float = (wy - 0.5) * dynamicDepth * fovFactor - 0.05
         let localZ: Float = -dynamicDepth
 
-        var rawLocalPos = SIMD3<Float>(localX, localY, localZ)
+        let rawLocalPos = SIMD3<Float>(localX, localY, localZ)
         let posAlpha: Float = 0.65
         let prevPos = isLeft ? prevLeftLocalPos : prevRightLocalPos
         let smoothLocalPos = prevPos * (1.0 - posAlpha) + rawLocalPos * posAlpha
@@ -434,9 +434,9 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         rawCurls.ring = computeGeometricCurl(.ringMCP, .ringPIP, .ringDIP, .ringTip)
         rawCurls.pinky = computeGeometricCurl(.littleMCP, .littlePIP, .littleDIP, .littleTip)
 
-        var prevC = isLeft ? prevLeftCurls : prevRightCurls
+        let prevC = isLeft ? prevLeftCurls : prevRightCurls
         let cAlpha: Float = 0.60
-        var smoothCurls = FingerCurls(
+        let smoothCurls = FingerCurls(
             thumb: prevC.thumb * (1 - cAlpha) + rawCurls.thumb * cAlpha,
             index: prevC.index * (1 - cAlpha) + rawCurls.index * cAlpha,
             middle: prevC.middle * (1 - cAlpha) + rawCurls.middle * cAlpha,

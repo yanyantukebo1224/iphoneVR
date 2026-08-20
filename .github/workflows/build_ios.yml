@@ -16,49 +16,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build iOS Project (Unsigned / Release)
+      - name: Make build script executable and build
         run: |
+          chmod +x iOS/build_ios.sh
           cd iOS
-          if [ -d "MoonlightHMD.xcodeproj" ]; then
-            xcodebuild -project MoonlightHMD.xcodeproj \
-              -scheme "MoonlightHMD" \
-              -configuration Release \
-              -sdk iphoneos \
-              -destination 'generic/platform=iOS' \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              -derivedDataPath build \
-              build
-          else
-            xcodebuild -project Moonlight.xcodeproj \
-              -scheme "Moonlight" \
-              -configuration Release \
-              -sdk iphoneos \
-              -destination 'generic/platform=iOS' \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              -derivedDataPath build \
-              build
-          fi
-
-      - name: Package IPA
-        run: |
-          cd iOS
-          mkdir -p build/Payload
-          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" -type d | head -n 1)
-          if [ -n "$APP_PATH" ]; then
-            cp -r "$APP_PATH" build/Payload/
-            cd build
-            zip -r MoonlightVR.ipa Payload
-          else
-            echo "Error: App bundle not found!"
-            exit 1
-          fi
+          ./build_ios.sh
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MoonlightVR-iOS-IPA
-          path: iOS/build/MoonlightVR.ipa
+          name: MoonlightHMD-iOS-IPA
+          path: iOS/build/MoonlightHMD.ipa

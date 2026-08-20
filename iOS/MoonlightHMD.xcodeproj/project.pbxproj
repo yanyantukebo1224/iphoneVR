@@ -108,6 +108,7 @@
 				A10000072C12345600000007 /* TrackingProtocol.swift in Sources */,
 				A10000092C12345600000009 /* MoonlightPairingManager.swift in Sources */,
 				A10000082C12345600000008 /* GameControllerManager.swift in Sources */,
+				A100000A2C1234560000000A /* VRSettingsManager.swift in Sources */,
 				A10000042C12345600000004 /* MoonlightVRViewController.swift in Sources */,
 				A10000052C12345600000005 /* DistortionShader.metal in Sources */,
 				A10000062C12345600000006 /* MoonlightHMDApp.swift in Sources */,
