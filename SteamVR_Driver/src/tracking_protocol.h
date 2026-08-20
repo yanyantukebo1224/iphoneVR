@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-#pragma pack(push, 1)
+#pragma pack(push, 4)
 
 #define IPPHONE_VR_MAGIC 0x52565049
 
@@ -66,13 +66,13 @@ enum ControllerButtonBits : uint32_t {
 };
 
 struct ControllerInputData {
-    uint8_t isConnected;       // 1 if physical Switch/MFi gamepad is connected
-    uint32_t buttonMask;       // ControllerButtonBits
-    float stickX;              // -1.0 to 1.0
-    float stickY;              // -1.0 to 1.0
-    float triggerValue;        // 0.0 to 1.0 (ZL/ZR)
-    float gripValue;           // 0.0 to 1.0 (L/R)
-    Quaternionf controllerRot; // Controller IMU rotation if available
+    uint32_t isConnected;      // 4 bytes: 1 if physical gamepad is connected
+    uint32_t buttonMask;       // 4 bytes: ControllerButtonBits
+    float stickX;              // 4 bytes: -1.0 to 1.0
+    float stickY;              // 4 bytes: -1.0 to 1.0
+    float triggerValue;        // 4 bytes: 0.0 to 1.0 (ZL/ZR)
+    float gripValue;           // 4 bytes: 0.0 to 1.0 (L/R)
+    Quaternionf controllerRot; // 16 bytes: Controller IMU rotation
 };
 
 struct FingerCurls {
@@ -92,23 +92,23 @@ struct FingerSplays {
 };
 
 struct HandPacketData {
-    uint8_t chirality; // 0 = Left, 1 = Right
-    uint8_t isTracked;
-    uint8_t isPinching;
-    float pinchDistance;
-    FingerCurls curls;
-    FingerSplays splays;
-    BoneTransform joints[VISION_JOINT_COUNT];
-    ControllerInputData controller;
+    uint32_t chirality;        // 4 bytes: 0 = Left, 1 = Right
+    uint32_t isTracked;        // 4 bytes
+    uint32_t isPinching;       // 4 bytes
+    float pinchDistance;       // 4 bytes
+    FingerCurls curls;         // 20 bytes
+    FingerSplays splays;       // 20 bytes
+    BoneTransform joints[VISION_JOINT_COUNT]; // 21 * 28 = 588 bytes
+    ControllerInputData controller;           // 40 bytes
 };
 
 struct TrackingPacket {
-    uint32_t magic;
-    uint32_t sequence;
-    double timestamp;
-    Vector3f headPosition;
-    Quaternionf headRotation;
-    HandPacketData hands[2]; // 0: Left, 1: Right
+    uint32_t magic;            // 4 bytes
+    uint32_t sequence;         // 4 bytes
+    double timestamp;          // 8 bytes
+    Vector3f headPosition;     // 12 bytes
+    Quaternionf headRotation;  // 16 bytes
+    HandPacketData hands[2];   // 2 * 664 = 1328 bytes
 };
 
 #pragma pack(pop)

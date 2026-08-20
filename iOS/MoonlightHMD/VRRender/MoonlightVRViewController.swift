@@ -154,10 +154,25 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
         let loader = MTKTextureLoader(device: device)
         if let texture = try? loader.newTexture(cgImage: cgImage, options: [
             .SRGB: false,
-            .generateMipmaps: false
+            .generateMipmaps: false,
+            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
         ]) {
-            DispatchQueue.main.async {
-                self.currentTexture = texture
+            self.currentTexture = texture
+        } else {
+            // フォールバック: CGContext 経由の直接 Metal テクスチャ書き込み
+            let width = cgImage.width
+            let height = cgImage.height
+            let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: width, height: height, mipmapped: false)
+            texDesc.usage = [.shaderRead, .shaderWrite]
+            if let newTex = device.makeTexture(descriptor: texDesc) {
+                var rawData = [UInt8](repeating: 0, count: width * height * 4)
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                if let ctx = CGContext(data: &rawData, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+                    ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+                    let region = MTLRegionMake2D(0, 0, width, height)
+                    newTex.replace(region: region, mipmapLevel: 0, withBytes: rawData, bytesPerRow: width * 4)
+                    self.currentTexture = newTex
+                }
             }
         }
     }

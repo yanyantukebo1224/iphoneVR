@@ -34,13 +34,13 @@ struct ControllerButtonBits {
 }
 
 struct ControllerInputData {
-    var isConnected: UInt8 = 0
-    var buttonMask: UInt32 = 0
-    var stickX: Float = 0
-    var stickY: Float = 0
-    var triggerValue: Float = 0
-    var gripValue: Float = 0
-    var controllerRot: Quaternionf = Quaternionf()
+    var isConnected: UInt32 = 0      // 4 bytes (aligned)
+    var buttonMask: UInt32 = 0       // 4 bytes
+    var stickX: Float = 0            // 4 bytes
+    var stickY: Float = 0            // 4 bytes
+    var triggerValue: Float = 0      // 4 bytes
+    var gripValue: Float = 0         // 4 bytes
+    var controllerRot: Quaternionf = Quaternionf() // 16 bytes
 }
 
 struct FingerCurls {
@@ -67,10 +67,10 @@ typealias HandJointsTuple = (
 )
 
 struct HandPacketData {
-    var chirality: UInt8 = 0
-    var isTracked: UInt8 = 0
-    var isPinching: UInt8 = 0
-    var pinchDistance: Float = 0
+    var chirality: UInt32 = 0        // 4 bytes (0 = Left, 1 = Right)
+    var isTracked: UInt32 = 0        // 4 bytes
+    var isPinching: UInt32 = 0       // 4 bytes
+    var pinchDistance: Float = 0     // 4 bytes
     var curls: FingerCurls = FingerCurls()
     var splays: FingerSplays = FingerSplays()
     var joints: HandJointsTuple

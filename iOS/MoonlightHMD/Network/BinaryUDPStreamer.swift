@@ -20,38 +20,51 @@ class BinaryUDPStreamer {
         guard let connection = connection else { return }
 
         sequenceNumber += 1
-        var data = Data()
 
-        // 1. ヘッダー
-        var magic: UInt32 = 0x52565049 // "IPVR"
-        var seq = sequenceNumber
-        var ts = Date().timeIntervalSince1970
+        let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
+        let dummyJoints: HandJointsTuple = (
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
+            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone, dummyBone
+        )
 
-        var hx = headPos.x
-        var hy = headPos.y
-        var hz = headPos.z
+        var finalLeft = leftHand ?? HandPacketData(
+            chirality: 0,
+            isTracked: 0,
+            isPinching: 0,
+            pinchDistance: 1.0,
+            curls: FingerCurls(),
+            splays: FingerSplays(),
+            joints: dummyJoints,
+            controller: ControllerInputData()
+        )
+        finalLeft.chirality = 0
 
-        var rw = headRot.real
-        var rx = headRot.imag.x
-        var ry = headRot.imag.y
-        var rz = headRot.imag.z
+        var finalRight = rightHand ?? HandPacketData(
+            chirality: 1,
+            isTracked: 0,
+            isPinching: 0,
+            pinchDistance: 1.0,
+            curls: FingerCurls(),
+            splays: FingerSplays(),
+            joints: dummyJoints,
+            controller: ControllerInputData()
+        )
+        finalRight.chirality = 1
 
-        withUnsafeBytes(of: &magic) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &seq) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &ts) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &hx) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &hy) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &hz) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &rw) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &rx) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &ry) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &rz) { data.append(contentsOf: $0) }
+        var packet = TrackingPacket(
+            magic: 0x52565049,
+            sequence: sequenceNumber,
+            timestamp: Date().timeIntervalSince1970,
+            headPosition: Vector3f(x: headPos.x, y: headPos.y, z: headPos.z),
+            headRotation: Quaternionf(w: headRot.real, x: headRot.imag.x, y: headRot.imag.y, z: headRot.imag.z),
+            hands: (finalLeft, finalRight)
+        )
 
-        // 2. 左右の手データ (0: 左手, 1: 右手)
-        appendHandData(hand: leftHand, defaultChirality: 0, to: &data)
-        appendHandData(hand: rightHand, defaultChirality: 1, to: &data)
+        // ゼロコピー完全一致バイナリ送信 (Swift ↔ C++ 構造体 1対1完全一致)
+        let data = Data(bytes: &packet, count: MemoryLayout<TrackingPacket>.size)
 
-        // 3. 高速UDP送信
         connection.send(content: data, completion: .contentProcessed({ error in
             if let error = error {
                 print("UDP Send Error: \(error)")
@@ -59,42 +72,8 @@ class BinaryUDPStreamer {
         }))
     }
 
-    private func appendHandData(hand: HandPacketData?, defaultChirality: UInt8, to data: inout Data) {
-        var chirality = defaultChirality
-        var isTracked: UInt8 = (hand?.isTracked == 1) ? 1 : 0
-        var isPinching: UInt8 = hand?.isPinching ?? 0
-        var pinchDist: Float = hand?.pinchDistance ?? 1.0
-
-        var curls = hand?.curls ?? FingerCurls()
-        var splays = hand?.splays ?? FingerSplays()
-
-        withUnsafeBytes(of: &chirality) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &isTracked) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &isPinching) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &pinchDist) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &curls) { data.append(contentsOf: $0) }
-        withUnsafeBytes(of: &splays) { data.append(contentsOf: $0) }
-
-        var dummyBone = BoneTransform(
-            position: Vector3f(x: 0, y: 0, z: 0),
-            orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
-        )
-
-        if let hand = hand {
-            withUnsafeBytes(of: hand.joints) { data.append(contentsOf: $0) }
-        } else {
-            for _ in 0..<21 {
-                withUnsafeBytes(of: &dummyBone) { data.append(contentsOf: $0) }
-            }
-        }
-
-        var controller = hand?.controller ?? ControllerInputData()
-        withUnsafeBytes(of: &controller) { data.append(contentsOf: $0) }
-    }
-
     func stop() {
         connection?.cancel()
         connection = nil
     }
 }
-

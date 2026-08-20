@@ -83,7 +83,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         if let observations = results, !observations.isEmpty {
             for observation in observations {
                 // 🖐️ Apple Vision公式の生体力学的左右手判定 (親指・小指の骨格幾何)
-                var determinedChirality: UInt8 = 0
+                var determinedChirality: UInt32 = 0
                 if observation.chirality == .right {
                     determinedChirality = 1
                 } else if observation.chirality == .left {
@@ -139,7 +139,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         onTrackingDataUpdated?(headPosition, headRotation, newLeft, newRight)
     }
 
-    private func createDefaultHandData(chirality: UInt8) -> HandPacketData {
+    private func createDefaultHandData(chirality: UInt32) -> HandPacketData {
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         let tupleJoints = (
             dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
@@ -159,7 +159,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         )
     }
 
-    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt8, frame: ARFrame) -> HandPacketData? {
+    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt32, frame: ARFrame) -> HandPacketData? {
         guard let recognizedPoints = try? observation.recognizedPoints(.all),
               let wristPoint = recognizedPoints[.wrist] else { return nil }
 
