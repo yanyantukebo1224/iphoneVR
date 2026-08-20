@@ -76,6 +76,12 @@ void ScreenStreamer::CaptureLoop() {
 
         auto targetHwnd = FindWindowA(NULL, "Headset Window");
         if (!targetHwnd) {
+            targetHwnd = FindWindowW(NULL, L"VRビュー");
+        }
+        if (!targetHwnd) {
+            targetHwnd = FindWindowA(NULL, "VR View");
+        }
+        if (!targetHwnd) {
             targetHwnd = FindWindowA("ValveVRUnlitWindow", NULL);
         }
         if (!targetHwnd) {
