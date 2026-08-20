@@ -144,10 +144,13 @@ class GameControllerManager: ObservableObject {
             if gamepad.dpad.right.isPressed { mask |= ControllerButtonBits.btnDpadRight }
 
             // Menu / System
-            if gamepad.buttonMenu.isPressed {
+            if gamepad.buttonMenu.isPressed && gamepad.buttonMenu.value > 0.8 {
                 mask |= ControllerButtonBits.btnSystem
             }
-            if let buttonOptions = gamepad.buttonOptions, buttonOptions.isPressed {
+            if let buttonOptions = gamepad.buttonOptions, buttonOptions.isPressed, buttonOptions.value > 0.8 {
+                mask |= ControllerButtonBits.btnSystem
+            }
+            if let buttonHome = gamepad.buttonHome, buttonHome.isPressed, buttonHome.value > 0.8 {
                 mask |= ControllerButtonBits.btnSystem
             }
         }
