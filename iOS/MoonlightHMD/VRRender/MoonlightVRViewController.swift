@@ -101,10 +101,14 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
     }
 
     var hostIP: String = "192.168.0.13"
-    private var directStreamTask: URLSessionDataTask?
-    private var streamSession: URLSession?
-    private var receivedDataBuffer = Data()
     private var isStreamingActive = false
+    private var displayLink: CADisplayLink?
+    private var isFetchingFrame = false
+    private let fetchSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 0.5
+        return URLSession(configuration: cfg)
+    }()
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -120,24 +124,28 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
 
     // 🖥️ PC 画面丸ごとダイレクト VR ストリーム受信 (Port 9051)
     func startDirectDesktopStream() {
-        guard let url = URL(string: "http://\(hostIP):9051") else { return }
-
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 3.0
-        streamSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 60.0
-        directStreamTask = streamSession?.dataTask(with: request)
-        directStreamTask?.resume()
-        print("🚀 Connecting to Direct PC Desktop Stream at: \(url)")
+        displayLink = CADisplayLink(target: self, selector: #selector(fetchNextFrame))
+        displayLink?.preferredFramesPerSecond = 60
+        displayLink?.add(to: .main, forMode: .common)
+        print("🚀 Connecting to Direct PC Desktop Stream at: http://\(hostIP):9051")
     }
 
     func stopDirectDesktopStream() {
-        directStreamTask?.cancel()
-        directStreamTask = nil
-        streamSession?.invalidateAndCancel()
-        streamSession = nil
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func fetchNextFrame() {
+        guard isStreamingActive, !isFetchingFrame else { return }
+        guard let url = URL(string: "http://\(hostIP):9051/screen.jpg") else { return }
+
+        isFetchingFrame = true
+        let task = fetchSession.dataTask(with: url) { [weak self] data, response, error in
+            defer { self?.isFetchingFrame = false }
+            guard let self = self, let data = data, let image = UIImage(data: data) else { return }
+            self.updateTexture(from: image)
+        }
+        task.resume()
     }
 
     // UIImage から MTLTexture へ超高速ロード
@@ -151,30 +159,6 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
             DispatchQueue.main.async {
                 self.currentTexture = texture
             }
-        }
-    }
-}
-
-// MARK: - URLSessionDataDelegate (MJPEG Multipart Stream Parser)
-extension MoonlightVRViewController: URLSessionDataDelegate {
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        receivedDataBuffer.append(data)
-
-        // JPEG の開始マーカー 0xFF, 0xD8 と終了マーカー 0xFF, 0xD9 を探索
-        while let startRange = receivedDataBuffer.range(of: Data([0xFF, 0xD8])),
-              let endRange = receivedDataBuffer.range(of: Data([0xFF, 0xD9]), in: startRange.upperBound..<receivedDataBuffer.count) {
-
-            let jpegData = receivedDataBuffer.subdata(in: startRange.lowerBound..<endRange.upperBound)
-            receivedDataBuffer.removeSubrange(0..<endRange.upperBound)
-
-            if let image = UIImage(data: jpegData) {
-                updateTexture(from: image)
-            }
-        }
-
-        // バッファ肥大化防止
-        if receivedDataBuffer.count > 5 * 1024 * 1024 {
-            receivedDataBuffer.removeAll()
         }
     }
 }

@@ -73,39 +73,61 @@ void ScreenStreamer::CaptureLoop() {
     ULONG quality = 75;
     encoderParams.Parameter[0].Value = &quality;
 
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
-
-    HDC hdcScreen = GetDC(NULL);
-    HDC hdcMem = CreateCompatibleDC(hdcScreen);
-    HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, screenW, screenH);
-    SelectObject(hdcMem, hBitmap);
-
     while (m_running) {
         auto startTime = std::chrono::steady_clock::now();
 
-        BitBlt(hdcMem, 0, 0, screenW, screenH, hdcScreen, 0, 0, SRCCOPY);
+        HWND hwndTarget = FindWindowA(NULL, "Headset Window");
+        HDC hdcTarget = NULL;
+        int screenW = 0;
+        int screenH = 0;
 
-        Bitmap bitmap(hBitmap, NULL);
-        IStream* pStream = NULL;
-        if (CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
-            if (bitmap.Save(pStream, &jpgClsid, &encoderParams) == Ok) {
-                STATSTG stat;
-                pStream->Stat(&stat, STATFLAG_NONAME);
-                ULONG size = (ULONG)stat.cbSize.QuadPart;
+        if (hwndTarget != NULL && IsWindow(hwndTarget)) {
+            RECT rc;
+            GetClientRect(hwndTarget, &rc);
+            screenW = rc.right - rc.left;
+            screenH = rc.bottom - rc.top;
+            hdcTarget = GetDC(hwndTarget);
+        }
 
-                std::vector<uint8_t> buffer(size);
-                LARGE_INTEGER liZero = { 0 };
-                pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
-                ULONG read = 0;
-                pStream->Read(buffer.data(), size, &read);
+        if (hdcTarget == NULL || screenW <= 0 || screenH <= 0) {
+            screenW = GetSystemMetrics(SM_CXSCREEN);
+            screenH = GetSystemMetrics(SM_CYSCREEN);
+            hdcTarget = GetDC(NULL);
+        }
 
-                {
-                    std::lock_guard<std::mutex> lock(m_frameMutex);
-                    m_latestJpegFrame = std::move(buffer);
+        if (hdcTarget != NULL && screenW > 0 && screenH > 0) {
+            HDC hdcMem = CreateCompatibleDC(hdcTarget);
+            HBITMAP hBitmap = CreateCompatibleBitmap(hdcTarget, screenW, screenH);
+            HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
+
+            BitBlt(hdcMem, 0, 0, screenW, screenH, hdcTarget, 0, 0, SRCCOPY);
+
+            Bitmap bitmap(hBitmap, NULL);
+            IStream* pStream = NULL;
+            if (CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
+                if (bitmap.Save(pStream, &jpgClsid, &encoderParams) == Ok) {
+                    STATSTG stat;
+                    pStream->Stat(&stat, STATFLAG_NONAME);
+                    ULONG size = (ULONG)stat.cbSize.QuadPart;
+
+                    std::vector<uint8_t> buffer(size);
+                    LARGE_INTEGER liZero = { 0 };
+                    pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
+                    ULONG read = 0;
+                    pStream->Read(buffer.data(), size, &read);
+
+                    {
+                        std::lock_guard<std::mutex> lock(m_frameMutex);
+                        m_latestJpegFrame = std::move(buffer);
+                    }
                 }
+                pStream->Release();
             }
-            pStream->Release();
+
+            SelectObject(hdcMem, hOldBitmap);
+            DeleteObject(hBitmap);
+            DeleteDC(hdcMem);
+            ReleaseDC(hwndTarget ? hwndTarget : NULL, hdcTarget);
         }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count();
@@ -114,10 +136,6 @@ void ScreenStreamer::CaptureLoop() {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
         }
     }
-
-    DeleteObject(hBitmap);
-    DeleteDC(hdcMem);
-    ReleaseDC(NULL, hdcScreen);
 
     GdiplusShutdown(gdiplusToken);
 }
@@ -139,10 +157,7 @@ void ScreenStreamer::StreamServerLoop(int port) {
         return;
     }
 
-    listen(listenSock, 4);
-
-    u_long nonBlocking = 1;
-    ioctlsocket(listenSock, FIONBIO, &nonBlocking);
+    listen(listenSock, 8);
 
     while (m_running) {
         fd_set readSet;
@@ -155,32 +170,60 @@ void ScreenStreamer::StreamServerLoop(int port) {
             SOCKET clientSock = accept(listenSock, NULL, NULL);
             if (clientSock != INVALID_SOCKET) {
                 std::thread([this, clientSock]() {
-                    std::string header = 
-                        "HTTP/1.1 200 OK\r\n"
-                        "Content-Type: multipart/x-mixed-replace; boundary=--frame\r\n"
-                        "Access-Control-Allow-Origin: *\r\n\r\n";
-                    send(clientSock, header.c_str(), (int)header.size(), 0);
+                    char reqBuf[1024] = { 0 };
+                    int reqLen = recv(clientSock, reqBuf, sizeof(reqBuf) - 1, 0);
+                    if (reqLen <= 0) {
+                        closesocket(clientSock);
+                        return;
+                    }
 
-                    while (m_running) {
+                    std::string req(reqBuf);
+                    if (req.find("/screen.jpg") != std::string::npos) {
+                        // 単一 JPEG レスポンス
                         std::vector<uint8_t> frame;
                         {
                             std::lock_guard<std::mutex> lock(m_frameMutex);
                             frame = m_latestJpegFrame;
                         }
-
+                        std::ostringstream ss;
+                        ss << "HTTP/1.1 200 OK\r\n"
+                           << "Content-Type: image/jpeg\r\n"
+                           << "Content-Length: " << frame.size() << "\r\n"
+                           << "Access-Control-Allow-Origin: *\r\n\r\n";
+                        std::string resp = ss.str();
+                        send(clientSock, resp.c_str(), (int)resp.size(), 0);
                         if (!frame.empty()) {
-                            std::ostringstream ss;
-                            ss << "--frame\r\n"
-                               << "Content-Type: image/jpeg\r\n"
-                               << "Content-Length: " << frame.size() << "\r\n\r\n";
-                            std::string partHeader = ss.str();
-
-                            if (send(clientSock, partHeader.c_str(), (int)partHeader.size(), 0) <= 0) break;
-                            if (send(clientSock, (const char*)frame.data(), (int)frame.size(), 0) <= 0) break;
-                            if (send(clientSock, "\r\n", 2, 0) <= 0) break;
+                            send(clientSock, (const char*)frame.data(), (int)frame.size(), 0);
                         }
+                    } else {
+                        // MJPEG Multipart リアルタイムストリーム
+                        std::string header = 
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: multipart/x-mixed-replace; boundary=--frame\r\n"
+                            "Access-Control-Allow-Origin: *\r\n\r\n";
+                        send(clientSock, header.c_str(), (int)header.size(), 0);
 
-                        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+                        while (m_running) {
+                            std::vector<uint8_t> frame;
+                            {
+                                std::lock_guard<std::mutex> lock(m_frameMutex);
+                                frame = m_latestJpegFrame;
+                            }
+
+                            if (!frame.empty()) {
+                                std::ostringstream ss;
+                                ss << "--frame\r\n"
+                                   << "Content-Type: image/jpeg\r\n"
+                                   << "Content-Length: " << frame.size() << "\r\n\r\n";
+                                std::string partHeader = ss.str();
+
+                                if (send(clientSock, partHeader.c_str(), (int)partHeader.size(), 0) <= 0) break;
+                                if (send(clientSock, (const char*)frame.data(), (int)frame.size(), 0) <= 0) break;
+                                if (send(clientSock, "\r\n", 2, 0) <= 0) break;
+                            }
+
+                            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+                        }
                     }
                     closesocket(clientSock);
                 }).detach();
