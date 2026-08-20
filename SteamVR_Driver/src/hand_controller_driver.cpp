@@ -445,6 +445,12 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
             // Plus (+) or Minus (-) triggers SteamVR System (Home) dashboard
             systemClicked = (mask & BTN_SYSTEM) != 0;
 
+            // スクリーンショット誤爆防止 (SteamVR の System + Trigger 同時押しコンボを回避)
+            if (systemClicked) {
+                isTriggerClicked = false;
+                trigVal = 0.0f;
+            }
+
             stickX = handData.controller.stickX;
             stickY = handData.controller.stickY;
         } else {
