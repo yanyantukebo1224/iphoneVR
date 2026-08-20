@@ -194,6 +194,19 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float curlRing   = std::clamp(handData.curls.ring, 0.0f, 1.0f);
     float curlPinky  = std::clamp(handData.curls.pinky, 0.0f, 1.0f);
 
+    // Joy-Conコントローラー接続時の自然なエルゴノミクス把持ポーズ
+    if (handData.controller.isConnected == 1) {
+        float trigVal = handData.controller.triggerValue;
+        float gripVal = handData.controller.gripValue;
+        bool isStickTouched = (std::abs(handData.controller.stickX) > 0.05f || std::abs(handData.controller.stickY) > 0.05f);
+
+        curlIndex = std::max(0.25f, trigVal);
+        curlMiddle = std::max(0.65f, gripVal);
+        curlRing = std::max(0.70f, gripVal);
+        curlPinky = std::max(0.75f, gripVal);
+        curlThumb = isStickTouched ? 0.35f : 0.15f;
+    }
+
     float splayThumb  = handData.splays.thumb;
     float splayIndex  = handData.splays.index;
     float splayMiddle = handData.splays.middle;
@@ -366,16 +379,16 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     vr::HmdVector3_t localOffset;
     auto now = std::chrono::steady_clock::now();
 
-    if (handData.isTracked == 1) {
+    if (handData.isTracked == 1 && handData.controller.isConnected == 0) {
         m_lastMovementTime = now;
-        localOffset.v[0] = handData.joints[VISION_JOINT_WRIST].position.x;
-        localOffset.v[1] = handData.joints[VISION_JOINT_WRIST].position.y;
-        localOffset.v[2] = handData.joints[VISION_JOINT_WRIST].position.z;
+        localOffset.v[0] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.x, -0.45f, 0.45f);
+        localOffset.v[1] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.y, -0.40f, 0.20f);
+        localOffset.v[2] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.z, -0.55f, -0.25f);
     } else {
-        // Default controller position in front of HMD
-        localOffset.v[0] = isLeft ? -0.20f : 0.20f;
-        localOffset.v[1] = -0.20f;
-        localOffset.v[2] = -0.40f;
+        // Natural ergonomic controller position in front of chest
+        localOffset.v[0] = isLeft ? -0.18f : 0.18f;
+        localOffset.v[1] = -0.18f;
+        localOffset.v[2] = -0.32f;
     }
 
     // Transform camera-local position to world space using HMD head rotation
@@ -384,9 +397,30 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     m_pose.vecPosition[1] = effectiveHeadY + worldOffset.v[1];
     m_pose.vecPosition[2] = headPos.z + worldOffset.v[2];
 
-    // Compute rotation
+    // Ergonomic forward-pointing grip rotation offset (Pitch forward ~30 deg, slight inward cant)
+    // Eliminates the downward-bent wrist bug in SteamVR / VRChat
+    double pitchAngle = -0.52; // ~-30 degrees forward tilt
+    double yawAngle = isLeft ? 0.12 : -0.12;
+    double rollAngle = isLeft ? 0.14 : -0.14;
+
+    double cy = cos(yawAngle * 0.5);
+    double sy = sin(yawAngle * 0.5);
+    double cp = cos(pitchAngle * 0.5);
+    double sp = sin(pitchAngle * 0.5);
+    double cr = cos(rollAngle * 0.5);
+    double sr = sin(rollAngle * 0.5);
+
+    vr::HmdQuaternion_t qGripOffset;
+    qGripOffset.w = cr * cp * cy + sr * sp * sy;
+    qGripOffset.x = sr * cp * cy - cr * sp * sy;
+    qGripOffset.y = cr * sp * cy + sr * cp * sy;
+    qGripOffset.z = cr * cp * sy - sr * sp * cy;
+
+    // Base hand orientation follows HMD direction with ergonomic grip offset
+    vr::HmdQuaternion_t qBaseHand = QuatMultiply(qHead, qGripOffset);
+
     if (handData.controller.isConnected == 1) {
-        // Joy-Con IMU attitude priority
+        // Joy-Con IMU attitude if available, otherwise solid ergonomic grip orientation
         const Quaternionf& cRot = handData.controller.controllerRot;
         if (cRot.w != 0.0f || cRot.x != 0.0f || cRot.y != 0.0f || cRot.z != 0.0f) {
             m_pose.qRotation.w = cRot.w;
@@ -394,16 +428,17 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
             m_pose.qRotation.y = cRot.y;
             m_pose.qRotation.z = cRot.z;
         } else {
-            m_pose.qRotation = qHead;
+            m_pose.qRotation = qBaseHand;
         }
     } else {
         // Camera hand tracking: combine head rotation with local hand orientation
         const Quaternionf& hRot = handData.joints[VISION_JOINT_WRIST].orientation;
         vr::HmdQuaternion_t qLocalHand = { (double)hRot.w, (double)hRot.x, (double)hRot.y, (double)hRot.z };
         if (qLocalHand.w == 0.0 && qLocalHand.x == 0.0 && qLocalHand.y == 0.0 && qLocalHand.z == 0.0) {
-            qLocalHand = { 1.0, 0.0, 0.0, 0.0 };
+            m_pose.qRotation = qBaseHand;
+        } else {
+            m_pose.qRotation = QuatMultiply(qHead, qLocalHand);
         }
-        m_pose.qRotation = QuatMultiply(qHead, qLocalHand);
     }
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
