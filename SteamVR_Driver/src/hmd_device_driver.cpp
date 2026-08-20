@@ -44,6 +44,9 @@ void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
     if (std::strcmp(pchComponentNameAndVersion, vr::IVRDisplayComponent_Version) == 0) {
         return static_cast<vr::IVRDisplayComponent*>(this);
     }
+    if (std::strcmp(pchComponentNameAndVersion, vr::IVRVirtualDisplay_Version) == 0) {
+        return static_cast<vr::IVRVirtualDisplay*>(this);
+    }
     return nullptr;
 }
 

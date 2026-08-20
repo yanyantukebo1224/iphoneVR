@@ -207,11 +207,21 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
         let estimatedDepth: Float = max(0.20, min(0.85, 0.055 / handSpan))
 
-        // HMDカメラ視野空間における真の3D空間座標 (X: 左右, Y: 上下, Z: 前後)
-        // リアカメラから見た座標系をユーザー自身の体感空間に鏡像マッピング (画面左 = ユーザー右手 = X > 0, 画面右 = ユーザー左手 = X < 0)
-        let rawWristX = Float(0.5 - wristPoint.location.x) * estimatedDepth * Float(1.35)
-        let rawWristY = Float(0.5 - wristPoint.location.y) * estimatedDepth * Float(1.35)
-        let rawWristZ = -estimatedDepth // カメラ前方 (メートル単位)
+        // 🖐️ HMD横向き（Landscape）カメラ軸補正 & 2.2倍アンプリファイ（高感度）相対オフセット計算
+        // カメラPortrait座標 -> HMD Landscape空間変換 (XとYの90度回転解消)
+        let motionGain: Float = 2.2
+        let deltaX = Float(wristPoint.location.y - 0.5) * motionGain * Float(0.5)
+        let deltaY = Float(0.5 - wristPoint.location.x) * motionGain * Float(0.5)
+        let deltaZ = Float(estimatedDepth - 0.45) * Float(1.5)
+
+        // 自然な構え位置 (左手: -0.22m, 右手: +0.22m) を基準とした相対位置変位
+        let basePosX: Float = isLeft ? -0.22 : 0.22
+        let basePosY: Float = -0.25
+        let basePosZ: Float = -0.45
+
+        let rawWristX = basePosX + deltaX
+        let rawWristY = basePosY + deltaY
+        let rawWristZ = basePosZ - deltaZ
 
         // EMA デュアルフィルタ (smooth alpha = 0.35)
         var targetWrist = SIMD3<Float>(rawWristX, rawWristY, rawWristZ)
