@@ -294,19 +294,20 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             }
         }
 
-        // 🖐️ 各指の個別 Curl（曲がり度合 0.0:全開 〜 1.0:全握り）安定計算
+        // 🖐️ 各指の個別 Curl（0.0: 完全全開/パー 〜 1.0: 完全握り/グー）
         let computeFingerCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
             guard let mcp = recognizedPoints[mcpKey], let tip = recognizedPoints[tipKey] else { return 0.0 }
             let dist = hypot(Float(tip.location.x - mcp.location.x), Float(tip.location.y - mcp.location.y))
+            // 指を伸ばした時 (dist ≈ 0.16) -> 0.0, 曲げた時 (dist ≈ 0.04) -> 1.0
             let rawCurl = (0.15 - dist) / 0.10
             return max(0.0, min(1.0, rawCurl))
         }
 
-        // 👍 親指の開き・立ち上がり感度
+        // 👍 親指の Curl (0.0: 直立・全開 〜 1.0: 手のひら折りたたみ)
         let computeThumbCurl = { () -> Float in
             guard let tip = recognizedPoints[.thumbTip], let indexMcp = recognizedPoints[.indexMCP] else { return 0.0 }
             let dist = hypot(Float(tip.location.x - indexMcp.location.x), Float(tip.location.y - indexMcp.location.y))
-            let raw = (0.18 - dist) / 0.12
+            let raw = (0.17 - dist) / 0.11
             return max(0.0, min(1.0, raw))
         }
 
@@ -317,18 +318,18 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         curls.ring = computeFingerCurl(.ringMCP, .ringTip)
         curls.pinky = computeFingerCurl(.littleMCP, .littleTip)
 
-        // 👌 OKサイン (ピンチ) の高感度直接判定 (親指先と人差し指先の距離)
+        // 👌 OKサイン判定
         var isOkPinch = false
         if let thbTip = recognizedPoints[.thumbTip], let idxTip = recognizedPoints[.indexTip] {
             let pDist = hypot(Float(thbTip.location.x - idxTip.location.x), Float(thbTip.location.y - idxTip.location.y))
-            if pDist < 0.085 {
+            if pDist < 0.080 {
                 isOkPinch = true
             }
         }
 
         if isPinching == 1 || isOkPinch {
-            curls.thumb = 0.65
-            curls.index = 0.70
+            curls.thumb = 0.60
+            curls.index = 0.65
             isPinching = 1
         }
 

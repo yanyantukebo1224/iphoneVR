@@ -289,7 +289,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let computeThumbCurl = { () -> Float in
             guard let tip = recognizedPoints[.thumbTip], let indexMcp = recognizedPoints[.indexMCP] else { return 0.0 }
             let dist = hypot(Float(tip.location.x - indexMcp.location.x), Float(tip.location.y - indexMcp.location.y))
-            let raw = (0.18 - dist) / 0.12
+            let raw = (0.17 - dist) / 0.11
             return max(0.0, min(1.0, raw))
         }
 
@@ -303,14 +303,14 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         var isOkPinch = false
         if let thbTip = recognizedPoints[.thumbTip], let idxTip = recognizedPoints[.indexTip] {
             let pDist = hypot(Float(thbTip.location.x - idxTip.location.x), Float(thbTip.location.y - idxTip.location.y))
-            if pDist < 0.085 {
+            if pDist < 0.080 {
                 isOkPinch = true
             }
         }
 
         if isPinching == 1 || isOkPinch {
-            curls.thumb = 0.65
-            curls.index = 0.70
+            curls.thumb = 0.60
+            curls.index = 0.65
             isPinching = 1
         }
 
