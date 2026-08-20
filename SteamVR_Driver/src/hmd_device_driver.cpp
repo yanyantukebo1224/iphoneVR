@@ -36,6 +36,7 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_SecondsFromVsyncToPhotons_Float, 0.011f);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_HasDisplayComponent_Bool, true);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DisplayDebugMode_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_ContainsProximitySensor_Bool, false);
@@ -60,9 +61,6 @@ void HMDDeviceDriver::PoseLoop() {
 void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
     if (std::strcmp(pchComponentNameAndVersion, vr::IVRDisplayComponent_Version) == 0) {
         return static_cast<vr::IVRDisplayComponent*>(this);
-    }
-    if (std::strcmp(pchComponentNameAndVersion, vr::IVRVirtualDisplay_Version) == 0) {
-        return static_cast<vr::IVRVirtualDisplay*>(this);
     }
     return nullptr;
 }
