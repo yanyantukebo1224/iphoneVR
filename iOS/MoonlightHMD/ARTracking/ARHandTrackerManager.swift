@@ -192,24 +192,23 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        // 2. 位置計算（手を引く動作を完全封印し、奥行き Z を目の前に固定）
-        // Vision 正規化座標 (0.0 ~ 1.0):
-        // 横向きゴーグル装着時: 左右変位 = (location.y - 0.5), 上下変位 = (0.5 - location.x)
-        let deltaX = Float(wristPoint.location.y - 0.5) * Float(0.65)
-        let deltaY = Float(0.5 - wristPoint.location.x) * Float(0.65)
+        // 2. ヘッドセット基準の素直な位置マッピング (Head-Relative 1:1 Mapping)
+        // Vision正規化座標: x (0.0:左 ~ 1.0:右), y (0.0:下 ~ 1.0:上)
+        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(0.70)
+        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(0.70)
 
-        // 基準位置: 目の前 (左: -0.18m, 右: +0.18m, 高さ: -0.15m, 奥行き: -0.42m 固定)
-        let basePosX: Float = isLeft ? -0.18 : 0.18
-        let basePosY: Float = -0.15
-        let basePosZ: Float = -0.42
+        // ヘッドセット基準のニュートラル位置 (左手: x=-0.15m, 右手: x=+0.15m, y=-0.12m, z=-0.40m)
+        let basePosX: Float = isLeft ? -0.15 : 0.15
+        let basePosY: Float = -0.12
+        let basePosZ: Float = -0.40
 
         let rawX = basePosX + deltaX
         let rawY = basePosY + deltaY
-        let rawZ = basePosZ // 奥行き完全固定（バックに下がるバグを根絶）
+        let rawZ = basePosZ // 奥行き完全固定
 
         // EMA フィルタで自然な追従
         var targetWrist = SIMD3<Float>(rawX, rawY, rawZ)
-        let alpha: Float = 0.40
+        let alpha: Float = 0.45
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -221,16 +220,13 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         // 3. 3D 回転クォータニオン (Orientation) の完全幾何計算
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
         if let middleMCP = recognizedPoints[.middleMCP] {
-            // 手首 -> 中指付け根の向きベクトル (手のひらの前後軸)
-            let fwdX = Float(middleMCP.location.y - wristPoint.location.y)
-            let fwdY = Float(wristPoint.location.x - middleMCP.location.x)
-            let fwdLen = max(0.001, sqrt(fwdX*fwdX + fwdY*fwdY))
-            let normFwdX = fwdX / fwdLen
-            let normFwdY = fwdY / fwdLen
+            // 手首 -> 中指付け根の方向ベクトル
+            let dirX = Float(middleMCP.location.x - wristPoint.location.x)
+            let dirY = Float(middleMCP.location.y - wristPoint.location.y)
 
-            // 2D 姿勢角 (Yaw/Roll) から回転クォータニオンを構成
-            let angle = atan2(normFwdX, normFwdY)
-            let halfAngle = angle * 0.5
+            // 真上 (0, 1) を基準角度 0 とした手首の傾き角
+            let angle = atan2(dirX, dirY)
+            let halfAngle = -angle * 0.5
             wristQuat = Quaternionf(
                 w: cos(halfAngle),
                 x: 0.0,
@@ -243,7 +239,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
         var bones = Array(repeating: dummyBone, count: 21)
 
-        // 手首（第0関節）: 正確な位置と回転を設定
+        // 手首（第0関節）
         bones[0] = BoneTransform(
             position: Vector3f(x: targetWrist.x, y: targetWrist.y, z: targetWrist.z),
             orientation: wristQuat

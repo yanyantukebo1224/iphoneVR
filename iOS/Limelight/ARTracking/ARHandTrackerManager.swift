@@ -189,19 +189,19 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        let deltaX = Float(wristPoint.location.y - 0.5) * Float(0.65)
-        let deltaY = Float(0.5 - wristPoint.location.x) * Float(0.65)
+        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(0.70)
+        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(0.70)
 
-        let basePosX: Float = isLeft ? -0.18 : 0.18
-        let basePosY: Float = -0.15
-        let basePosZ: Float = -0.42
+        let basePosX: Float = isLeft ? -0.15 : 0.15
+        let basePosY: Float = -0.12
+        let basePosZ: Float = -0.40
 
         let rawX = basePosX + deltaX
         let rawY = basePosY + deltaY
         let rawZ = basePosZ
 
         var targetWrist = SIMD3<Float>(rawX, rawY, rawZ)
-        let alpha: Float = 0.40
+        let alpha: Float = 0.45
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -212,14 +212,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
         if let middleMCP = recognizedPoints[.middleMCP] {
-            let fwdX = Float(middleMCP.location.y - wristPoint.location.y)
-            let fwdY = Float(wristPoint.location.x - middleMCP.location.x)
-            let fwdLen = max(0.001, sqrt(fwdX*fwdX + fwdY*fwdY))
-            let normFwdX = fwdX / fwdLen
-            let normFwdY = fwdY / fwdLen
+            let dirX = Float(middleMCP.location.x - wristPoint.location.x)
+            let dirY = Float(middleMCP.location.y - wristPoint.location.y)
 
-            let angle = atan2(normFwdX, normFwdY)
-            let halfAngle = angle * 0.5
+            let angle = atan2(dirX, dirY)
+            let halfAngle = -angle * 0.5
             wristQuat = Quaternionf(
                 w: cos(halfAngle),
                 x: 0.0,
