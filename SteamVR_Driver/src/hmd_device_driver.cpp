@@ -15,7 +15,12 @@ HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(vr::k_unTrackedDeviceIndexInva
     m_config.offsetY = 1.65f;
 }
 
-HMDDeviceDriver::~HMDDeviceDriver() {}
+HMDDeviceDriver::~HMDDeviceDriver() {
+    m_poseThreadRunning = false;
+    if (m_poseThread.joinable()) {
+        m_poseThread.join();
+    }
+}
 
 vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     m_unObjectId = unObjectId;
@@ -37,7 +42,19 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
 
     UpdateHeadPose(Vector3f{0.0f, 0.0f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
 
+    m_poseThreadRunning = true;
+    m_poseThread = std::thread(&HMDDeviceDriver::PoseLoop, this);
+
     return vr::VRInitError_None;
+}
+
+void HMDDeviceDriver::PoseLoop() {
+    while (m_poseThreadRunning) {
+        if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
+            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    }
 }
 
 void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {

@@ -3,6 +3,9 @@
 
 #include "openvr_driver.h"
 #include "tracking_protocol.h"
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 struct CoordinateConfig {
     float posXMultiplier = 1.0f;
@@ -61,6 +64,10 @@ private:
     CoordinateConfig m_config;
     uint32_t m_unObjectId;
     vr::PropertyContainerHandle_t m_ulPropertyContainer;
+
+    std::atomic<bool> m_poseThreadRunning{false};
+    std::thread m_poseThread;
+    void PoseLoop();
 };
 
 #endif // HMD_DEVICE_DRIVER_H
