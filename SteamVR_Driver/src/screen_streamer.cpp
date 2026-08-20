@@ -68,16 +68,25 @@ void ScreenStreamer::CaptureLoop() {
     encoderParams.Parameter[0].Guid = EncoderQuality;
     encoderParams.Parameter[0].Type = EncoderParameterValueTypeLong;
     encoderParams.Parameter[0].NumberOfValues = 1;
-    ULONG quality = 65;
+    ULONG quality = 60;
     encoderParams.Parameter[0].Value = &quality;
 
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);
 
+    // 🖥️ 720p 高速スケールバッファ (超軽量 30KB/frame 転送)
+    int streamW = 1280;
+    int streamH = 720;
+
     HDC hdcScreen = GetDC(NULL);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
     HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, screenW, screenH);
     HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
+
+    HDC hdcScaled = CreateCompatibleDC(hdcScreen);
+    HBITMAP hScaledBitmap = CreateCompatibleBitmap(hdcScreen, streamW, streamH);
+    HGDIOBJ hOldScaled = SelectObject(hdcScaled, hScaledBitmap);
+    SetStretchBltMode(hdcScaled, COLORONCOLOR);
 
     while (m_running) {
         auto startTime = std::chrono::steady_clock::now();
@@ -112,7 +121,10 @@ void ScreenStreamer::CaptureLoop() {
         // 🖥️ Zero-Overhead Direct Desktop BitBlt Capture
         BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
 
-        Bitmap bitmap(hBitmap, NULL);
+        // 🚀 高速縮小転送 (720p)
+        StretchBlt(hdcScaled, 0, 0, streamW, streamH, hdcMem, 0, 0, captureW, captureH, SRCCOPY);
+
+        Bitmap bitmap(hScaledBitmap, NULL);
         IStream* pStream = NULL;
         if (CreateStreamOnHGlobal(NULL, TRUE, &pStream) == S_OK) {
             if (bitmap.Save(pStream, &jpgClsid, &encoderParams) == Ok) {
@@ -140,6 +152,10 @@ void ScreenStreamer::CaptureLoop() {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
         }
     }
+
+    SelectObject(hdcScaled, hOldScaled);
+    DeleteObject(hScaledBitmap);
+    DeleteDC(hdcScaled);
 
     SelectObject(hdcMem, hOldBitmap);
     DeleteObject(hBitmap);

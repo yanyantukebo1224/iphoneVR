@@ -189,19 +189,19 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = currentPinchState ? 1 : 0
         }
 
-        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(0.70)
-        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(0.70)
+        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(1.20)
+        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(1.50)
 
-        let basePosX: Float = isLeft ? -0.15 : 0.15
-        let basePosY: Float = -0.12
-        let basePosZ: Float = -0.40
+        let basePosX: Float = isLeft ? -0.18 : 0.18
+        let basePosY: Float = -0.08
+        let basePosZ: Float = -0.68
 
         let rawX = basePosX + deltaX
         let rawY = basePosY + deltaY
         let rawZ = basePosZ
 
         var targetWrist = SIMD3<Float>(rawX, rawY, rawZ)
-        let alpha: Float = 0.45
+        let alpha: Float = 0.50
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -245,8 +245,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         for (idx, key) in fingerJointKeys.enumerated() {
             if let point = recognizedPoints[key] {
-                let relX = Float(point.location.y - wristPoint.location.y) * Float(0.12)
-                let relY = Float(wristPoint.location.x - point.location.x) * Float(0.12)
+                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.20)
+                let relY = Float(point.location.y - wristPoint.location.y) * Float(0.20)
                 let relZ = Float(0.0)
 
                 bones[idx + 1] = BoneTransform(
@@ -256,15 +256,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             }
         }
 
-        // 🖐️ 各指の個別 Curl（曲がり度合 0.0〜1.0）精密計算
         let computeFingerCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
             guard let mcp = recognizedPoints[mcpKey], let tip = recognizedPoints[tipKey] else { return 0.0 }
-            let mcpDist = hypot(Float(mcp.location.x - wristPoint.location.x), Float(mcp.location.y - wristPoint.location.y))
-            let tipDist = hypot(Float(tip.location.x - wristPoint.location.x), Float(tip.location.y - wristPoint.location.y))
-            let maxSpan = mcpDist * 2.1
-            let currentSpan = tipDist
-            let curl = 1.0 - ((currentSpan - mcpDist) / (maxSpan - mcpDist))
-            return max(0.0, min(1.0, curl))
+            let dist = hypot(Float(tip.location.x - mcp.location.x), Float(tip.location.y - mcp.location.y))
+            let rawCurl = (0.15 - dist) / 0.11
+            return max(0.0, min(1.0, rawCurl))
         }
 
         var curls = FingerCurls()

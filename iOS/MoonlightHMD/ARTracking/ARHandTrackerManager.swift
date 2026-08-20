@@ -194,21 +194,22 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         // 2. ヘッドセット基準の素直な位置マッピング (Head-Relative 1:1 Mapping)
         // Vision正規化座標: x (0.0:左 ~ 1.0:右), y (0.0:下 ~ 1.0:上)
-        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(0.70)
-        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(0.70)
+        // ↕️ 上下・左右の移動量を大幅強化 (ダイナミックな操作感)
+        let deltaX = (Float(wristPoint.location.x) - 0.5) * Float(1.20)
+        let deltaY = (Float(wristPoint.location.y) - 0.5) * Float(1.50)
 
-        // ヘッドセット基準のニュートラル位置 (左手: x=-0.15m, 右手: x=+0.15m, y=-0.12m, z=-0.40m)
-        let basePosX: Float = isLeft ? -0.15 : 0.15
-        let basePosY: Float = -0.12
-        let basePosZ: Float = -0.40
+        // 🚀 Z座標を圧倒的に前へ配置 (目の前 68cm: 操作しやすい自然な構え)
+        let basePosX: Float = isLeft ? -0.18 : 0.18
+        let basePosY: Float = -0.08
+        let basePosZ: Float = -0.68
 
         let rawX = basePosX + deltaX
         let rawY = basePosY + deltaY
-        let rawZ = basePosZ // 奥行き完全固定
+        let rawZ = basePosZ // 奥行き安定固定
 
         // EMA フィルタで自然な追従
         var targetWrist = SIMD3<Float>(rawX, rawY, rawZ)
-        let alpha: Float = 0.45
+        let alpha: Float = 0.50
         if isLeft {
             targetWrist = prevLeftWristPos * (1.0 - alpha) + targetWrist * alpha
             prevLeftWristPos = targetWrist
@@ -220,15 +221,12 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         // 3. 3D 回転クォータニオン (SteamVR Knuckles 姿勢系アラインメント)
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
         if let middleMCP = recognizedPoints[.middleMCP] {
-            // 手首 -> 中指付け根のベクトル
             let dirX = Float(middleMCP.location.x - wristPoint.location.x)
             let dirY = Float(middleMCP.location.y - wristPoint.location.y)
 
-            // Roll (Z軸回転)
             let rollAngle = atan2(dirX, max(0.001, dirY))
             let halfRoll = -rollAngle * 0.5
 
-            // 基本姿勢: 手のひらを前、指先を上に向ける自然な回転
             wristQuat = Quaternionf(
                 w: cos(halfRoll),
                 x: 0.0,
@@ -257,8 +255,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
 
         for (idx, key) in fingerJointKeys.enumerated() {
             if let point = recognizedPoints[key] {
-                let relX = Float(point.location.y - wristPoint.location.y) * Float(0.12)
-                let relY = Float(wristPoint.location.x - point.location.x) * Float(0.12)
+                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.20)
+                let relY = Float(point.location.y - wristPoint.location.y) * Float(0.20)
                 let relZ = Float(0.0)
 
                 bones[idx + 1] = BoneTransform(
@@ -268,15 +266,13 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             }
         }
 
-        // 🖐️ 各指の個別 Curl（曲がり度合 0.0〜1.0）精密計算
+        // 🖐️ 各指の個別 Curl（曲がり度合 0.0:全開 〜 1.0:全握り）安定計算
         let computeFingerCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
             guard let mcp = recognizedPoints[mcpKey], let tip = recognizedPoints[tipKey] else { return 0.0 }
-            let mcpDist = hypot(Float(mcp.location.x - wristPoint.location.x), Float(mcp.location.y - wristPoint.location.y))
-            let tipDist = hypot(Float(tip.location.x - wristPoint.location.x), Float(tip.location.y - wristPoint.location.y))
-            let maxSpan = mcpDist * 2.1
-            let currentSpan = tipDist
-            let curl = 1.0 - ((currentSpan - mcpDist) / (maxSpan - mcpDist))
-            return max(0.0, min(1.0, curl))
+            let dist = hypot(Float(tip.location.x - mcp.location.x), Float(tip.location.y - mcp.location.y))
+            // 指を伸ばした時の距離 (約0.15) から折り曲げた時の距離 (約0.04) への正規化
+            let rawCurl = (0.15 - dist) / 0.11
+            return max(0.0, min(1.0, rawCurl))
         }
 
         var curls = FingerCurls()
