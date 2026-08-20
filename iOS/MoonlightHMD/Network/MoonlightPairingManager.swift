@@ -93,6 +93,28 @@ class MoonlightPairingManager: ObservableObject {
         task.resume()
     }
 
+    func launchApp(hostIP: String, appName: String = "Desktop", completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "http://\(hostIP):47989/launch?uniqueid=0123456789ABCDEF&appid=7&mode=1920x1080x60") else {
+            completion(false)
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0
+
+        let task = session.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                if let data = data, let str = String(data: data, encoding: .utf8), str.contains("<root") {
+                    print("✅ Sunshine / Moonlight stream launched successfully!")
+                    completion(true)
+                } else {
+                    completion(false)
+                }
+            }
+        }
+        task.resume()
+    }
+
     private func extractTagValue(from xml: String, tag: String) -> String? {
         let pattern = "<\(tag)>(.*?)</\(tag)>"
         if let regex = try? NSRegularExpression(pattern: pattern, options: []) {

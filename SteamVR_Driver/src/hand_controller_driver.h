@@ -22,7 +22,8 @@ public:
     
     static void ConvertVision21ToSteamVR31(
         const HandPacketData& handData,
-        vr::VRBoneTransform_t outBones[31]
+        vr::VRBoneTransform_t outBones[31],
+        vr::ETrackedControllerRole role
     );
 
 private:

@@ -247,6 +247,9 @@ struct ContentView: View {
             isStreaming = false
         } else {
             UIApplication.shared.isIdleTimerDisabled = true
+            pairingManager.launchApp(hostIP: targetIP) { success in
+                print("Launch app completed: \(success)")
+            }
             streamer.connect(targetIP: targetIP, port: 9050)
             trackerManager.startTracking()
             isStreaming = true

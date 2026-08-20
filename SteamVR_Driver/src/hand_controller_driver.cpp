@@ -57,11 +57,12 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "driver_iphonevr");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "iPhoneVR Left Hand" : "iPhoneVR Right Hand");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, isLeft ? "iPhoneVR_LeftHand_001" : "iPhoneVR_RightHand_001");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "HTC/Valve/iPhoneVR");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, "vr_controller_vive_1_5");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "indexcontroller");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "Knuckles Left" : "Knuckles Right");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, isLeft ? "iPhoneVR_Knuckles_Left" : "iPhoneVR_Knuckles_Right");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "Valve");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, isLeft ? "{indexcontroller}valve_controller_knuckles_left" : "{indexcontroller}valve_controller_knuckles_right");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ControllerType_String, "knuckles");
     
     vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
@@ -142,86 +143,75 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         m_lastPosition[0] = rawX;
         m_lastPosition[1] = rawY;
         m_lastPosition[2] = rawZ;
-    }
 
-    auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - m_lastMovementTime).count();
+        m_pose.vecPosition[0] = headPos.x + defaultOffsetX + rawX;
+        m_pose.vecPosition[1] = effectiveHeadY + defaultOffsetY + rawY;
+        m_pose.vecPosition[2] = headPos.z + defaultOffsetZ + rawZ;
 
-    float targetOffsetX = defaultOffsetX;
-    float targetOffsetY = defaultOffsetY;
-    float targetOffsetZ = defaultOffsetZ;
-
-    if (elapsedSeconds < 3 && handData.isTracked == 1) {
-        targetOffsetX = defaultOffsetX + rawX;
-        targetOffsetY = defaultOffsetY + rawY;
-        targetOffsetZ = defaultOffsetZ + rawZ;
-    }
-
-    float easingFactor = 0.35f;
-    m_smoothedPosition[0] += (targetOffsetX - m_smoothedPosition[0]) * easingFactor;
-    m_smoothedPosition[1] += (targetOffsetY - m_smoothedPosition[1]) * easingFactor;
-    m_smoothedPosition[2] += (targetOffsetZ - m_smoothedPosition[2]) * easingFactor;
-
-    m_pose.vecPosition[0] = headPos.x + m_smoothedPosition[0];
-    m_pose.vecPosition[1] = effectiveHeadY + m_smoothedPosition[1];
-    m_pose.vecPosition[2] = headPos.z + m_smoothedPosition[2];
-
-    if (handData.controller.isConnected == 1 && 
-        (handData.controller.controllerRot.w != 0.0f || handData.controller.controllerRot.x != 0.0f || 
-         handData.controller.controllerRot.y != 0.0f || handData.controller.controllerRot.z != 0.0f)) {
-        m_pose.qRotation.w = handData.controller.controllerRot.w;
-        m_pose.qRotation.x = handData.controller.controllerRot.x;
-        m_pose.qRotation.y = handData.controller.controllerRot.y;
-        m_pose.qRotation.z = handData.controller.controllerRot.z;
+        const Quaternionf& wRot = handData.joints[VISION_JOINT_WRIST].orientation;
+        m_pose.qRotation.w = wRot.w;
+        m_pose.qRotation.x = wRot.x;
+        m_pose.qRotation.y = wRot.y;
+        m_pose.qRotation.z = wRot.z;
     } else {
-        m_pose.qRotation.w = 0.92388f;
-        m_pose.qRotation.x = 0.38268f;
-        m_pose.qRotation.y = 0.0f;
-        m_pose.qRotation.z = 0.0f;
+        auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastMovementTime).count();
+        if (elapsedMs > 500) {
+            m_pose.vecPosition[0] = headPos.x + defaultOffsetX;
+            m_pose.vecPosition[1] = effectiveHeadY + defaultOffsetY;
+            m_pose.vecPosition[2] = headPos.z + defaultOffsetZ;
+
+            if (handData.controller.isConnected == 1) {
+                const Quaternionf& cRot = handData.controller.controllerRot;
+                if (cRot.w != 0.0f || cRot.x != 0.0f || cRot.y != 0.0f || cRot.z != 0.0f) {
+                    m_pose.qRotation.w = cRot.w;
+                    m_pose.qRotation.x = cRot.x;
+                    m_pose.qRotation.y = cRot.y;
+                    m_pose.qRotation.z = cRot.z;
+                } else {
+                    m_pose.qRotation.w = 1.0;
+                    m_pose.qRotation.x = 0.0;
+                    m_pose.qRotation.y = 0.0;
+                    m_pose.qRotation.z = 0.0;
+                }
+            } else {
+                m_pose.qRotation.w = 1.0;
+                m_pose.qRotation.x = 0.0;
+                m_pose.qRotation.y = 0.0;
+                m_pose.qRotation.z = 0.0;
+            }
+        }
     }
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
+        // Physical inputs from connected Joy-Con or Gamepad
+        bool btnAorX = false;
+        bool btnBorY = false;
         bool isTriggerClicked = false;
         float trigVal = 0.0f;
         bool isGripClicked = false;
         float gripVal = 0.0f;
-        bool btnAorX = false;
-        bool btnBorY = false;
         bool stickClicked = false;
         bool systemClicked = false;
         float stickX = 0.0f;
         float stickY = 0.0f;
-
-        bool isPinchingActive = (handData.isPinching == 1);
-        float cameraTrigVal = isPinchingActive ? 1.0f : handData.curls.index;
-        float cameraGripVal = (handData.curls.middle + handData.curls.ring + handData.curls.pinky) / 3.0f;
 
         if (handData.controller.isConnected == 1) {
             uint32_t mask = handData.controller.buttonMask;
             btnAorX = (mask & BTN_A_OR_X) != 0;
             btnBorY = (mask & BTN_B_OR_Y) != 0;
 
-            // Physical controller + Camera finger tracking simultaneous merge
-            float physTrig = handData.controller.triggerValue;
-            bool physTrigClick = (mask & BTN_TRIGGER_CLICK) != 0 || (physTrig > 0.5f);
-            isTriggerClicked = physTrigClick || isPinchingActive || (cameraTrigVal > 0.65f);
-            trigVal = physTrigClick ? 1.0f : ((physTrig > cameraTrigVal) ? physTrig : cameraTrigVal);
+            trigVal = handData.controller.triggerValue;
+            isTriggerClicked = (mask & BTN_TRIGGER_CLICK) != 0 || (trigVal > 0.5f);
 
-            float physGrip = handData.controller.gripValue;
-            bool physGripClick = (mask & BTN_GRIP_CLICK) != 0 || (physGrip > 0.5f);
-            isGripClicked = physGripClick || (cameraGripVal > 0.70f);
-            gripVal = physGripClick ? 1.0f : ((physGrip > cameraGripVal) ? physGrip : cameraGripVal);
+            gripVal = handData.controller.gripValue;
+            isGripClicked = (mask & BTN_GRIP_CLICK) != 0 || (gripVal > 0.5f);
 
             stickClicked = (mask & BTN_THUMBSTICK_CLICK) != 0;
             systemClicked = (mask & BTN_SYSTEM) != 0;
             stickX = handData.controller.stickX;
             stickY = handData.controller.stickY;
-        } else {
-            isTriggerClicked = isPinchingActive || (cameraTrigVal > 0.65f);
-            trigVal = cameraTrigVal;
-            isGripClicked = (cameraGripVal > 0.70f);
-            gripVal = cameraGripVal;
         }
 
         if (m_ulTriggerClickComponent != vr::k_ulInvalidInputComponentHandle) {
@@ -269,36 +259,199 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         }
 
         vr::VRBoneTransform_t bones[31];
-        ConvertVision21ToSteamVR31(handData, bones);
+        ConvertVision21ToSteamVR31(handData, bones, m_role);
         if (m_ulSkeletonComponent != vr::k_ulInvalidInputComponentHandle) {
             vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithController, bones, 31);
+            vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithoutController, bones, 31);
         }
     }
 }
 
-static inline Quaternionf GetBoneRotationMultiAxis(float pitchAngleRad, float yawAngleRad, float rollAngleRad = 0.0f) {
-    float cp = std::cos(pitchAngleRad * 0.5f), sp = std::sin(pitchAngleRad * 0.5f);
-    float cy = std::cos(yawAngleRad * 0.5f),   sy = std::sin(yawAngleRad * 0.5f);
-    float cr = std::cos(rollAngleRad * 0.5f),  sr = std::sin(rollAngleRad * 0.5f);
+// Valve Official Skeletal Input Simulation
+#define DEG_TO_RAD(deg) ((deg) * 0.017453292519943295f)
 
-    Quaternionf q;
-    q.w = cr * cp * cy + sr * sp * sy;
-    q.x = sr * cp * cy - cr * sp * sy;
-    q.y = cr * sp * cy + sr * cp * sy;
-    q.z = cr * cp * sy - sr * sp * cy;
-    return q;
+enum EOpenVRBone {
+    eBone_Root = 0,
+    eBone_Wrist,
+    eBone_Thumb0,
+    eBone_Thumb1,
+    eBone_Thumb2,
+    eBone_Thumb3,
+    eBone_IndexFinger0,
+    eBone_IndexFinger1,
+    eBone_IndexFinger2,
+    eBone_IndexFinger3,
+    eBone_IndexFinger4,
+    eBone_MiddleFinger0,
+    eBone_MiddleFinger1,
+    eBone_MiddleFinger2,
+    eBone_MiddleFinger3,
+    eBone_MiddleFinger4,
+    eBone_RingFinger0,
+    eBone_RingFinger1,
+    eBone_RingFinger2,
+    eBone_RingFinger3,
+    eBone_RingFinger4,
+    eBone_PinkyFinger0,
+    eBone_PinkyFinger1,
+    eBone_PinkyFinger2,
+    eBone_PinkyFinger3,
+    eBone_PinkyFinger4,
+    eBone_Aux_Thumb,
+    eBone_Aux_IndexFinger,
+    eBone_Aux_MiddleFinger,
+    eBone_Aux_RingFinger,
+    eBone_Aux_PinkyFinger,
+    eBone_Count
+};
+
+struct HandSimSplayableJoint {
+    float swing[2] = { 0.f, 0.f };
+    float twist = 0.f;
+};
+
+struct HandSimJoint {
+    float rotation = 0.f;
+};
+
+struct HandSimThumb {
+    HandSimSplayableJoint metacarpal;
+    HandSimSplayableJoint proximal;
+    HandSimJoint distal;
+};
+
+struct HandSimFinger {
+    HandSimSplayableJoint metacarpal;
+    HandSimSplayableJoint proximal;
+    HandSimJoint intermediate;
+    HandSimJoint distal;
+};
+
+struct HandSimHand {
+    vr::ETrackedControllerRole role;
+    HandSimThumb thumb;
+    HandSimFinger fingers[4];
+};
+
+static const float finger_joint_lengths[5][5] = {
+    { 0.05f, 0.05f, 0.035f, 0.025f, 0.f },
+    { 0.03f, 0.073f, 0.045f, 0.025f, 0.02f },
+    { 0.01f, 0.091f, 0.049f, 0.03f, 0.02f },
+    { 0.02f, 0.073f, 0.045f, 0.03f, 0.03f },
+    { 0.03f, 0.067f, 0.03f, 0.025f, 0.02f }
+};
+
+static inline vr::HmdQuaternion_t QuatMultiply(const vr::HmdQuaternion_t& q1, const vr::HmdQuaternion_t& q2) {
+    return {
+        q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
+        q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+        q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+        q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w
+    };
+}
+
+static inline vr::HmdVector3_t QuatRotateVec(const vr::HmdVector3_t& v, const vr::HmdQuaternion_t& q) {
+    vr::HmdQuaternion_t qv = { 0.0, (double)v.v[0], (double)v.v[1], (double)v.v[2] };
+    vr::HmdQuaternion_t qConj = { q.w, -q.x, -q.y, -q.z };
+    vr::HmdQuaternion_t res = QuatMultiply(QuatMultiply(q, qv), qConj);
+    vr::HmdVector3_t outV;
+    outV.v[0] = (float)res.x;
+    outV.v[1] = (float)res.y;
+    outV.v[2] = (float)res.z;
+    return outV;
+}
+
+static inline vr::HmdQuaternion_t QuatFromEuler(float pitch, float yaw, float roll) {
+    float cp = std::cos(pitch * 0.5f), sp = std::sin(pitch * 0.5f);
+    float cy = std::cos(yaw * 0.5f),   sy = std::sin(yaw * 0.5f);
+    float cr = std::cos(roll * 0.5f),  sr = std::sin(roll * 0.5f);
+    return {
+        (double)(cr * cp * cy + sr * sp * sy),
+        (double)(sr * cp * cy - cr * sp * sy),
+        (double)(cr * sp * cy + sr * cp * sy),
+        (double)(cr * cp * sy - sr * sp * cy)
+    };
+}
+
+static inline vr::HmdQuaternion_t QuatFromSwingTwist(const float swing[2], float twist) {
+    vr::HmdQuaternion_t qSwing = QuatFromEuler(swing[0], swing[1], 0.f);
+    vr::HmdQuaternion_t qTwist = QuatFromEuler(0.f, 0.f, twist);
+    return QuatMultiply(qSwing, qTwist);
+}
+
+static void ComputeBoneTransform(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const vr::HmdVector3_t& position, vr::VRBoneTransform_t& out_transform) {
+    out_transform.orientation.w = (float)orientation.w;
+    out_transform.orientation.x = (float)orientation.x;
+    out_transform.orientation.y = (float)orientation.y;
+    out_transform.orientation.z = (float)orientation.z;
+
+    out_transform.position.v[0] = (float)position.v[0];
+    out_transform.position.v[1] = (float)position.v[1];
+    out_transform.position.v[2] = (float)position.v[2];
+    out_transform.position.v[3] = 1.0f;
+
+    if (role == vr::TrackedControllerRole_RightHand) {
+        out_transform.position.v[0] *= -1.f;
+    }
+}
+
+static void ComputeBoneTransform(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const float joint_length, vr::VRBoneTransform_t& out_transform) {
+    vr::HmdVector3_t pos = { joint_length, 0.f, 0.f };
+    ComputeBoneTransform(role, orientation, pos, out_transform);
+}
+
+static void ComputeBoneTransformMetacarpal(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const float joint_length, vr::VRBoneTransform_t& out_transform) {
+    const vr::HmdVector3_t offset = { joint_length, 0.f, 0.f };
+    vr::HmdQuaternion_t magic = { 0.5, 0.5, -0.5, 0.5 };
+    vr::HmdQuaternion_t bone_orientation = QuatMultiply(magic, orientation);
+    vr::HmdVector3_t bone_position = QuatRotateVec(offset, bone_orientation);
+
+    if (role == vr::TrackedControllerRole_RightHand) {
+        std::swap(bone_orientation.w, bone_orientation.x);
+        std::swap(bone_orientation.y, bone_orientation.z);
+        bone_orientation.x *= -1.f;
+        bone_orientation.z *= -1.f;
+    }
+
+    ComputeBoneTransform(role, bone_orientation, bone_position, out_transform);
+}
+
+static int CalculateBoneTransformPositionFromFinger(int finger, int bone_in_finger) {
+    return eBone_IndexFinger0 + finger * 5 + bone_in_finger;
 }
 
 void HandControllerDriver::ConvertVision21ToSteamVR31(
     const HandPacketData& handData,
-    vr::VRBoneTransform_t outBones[31]
+    vr::VRBoneTransform_t outBones[31],
+    vr::ETrackedControllerRole role
 ) {
-    for (int i = 0; i < 31; ++i) {
-        SetBone(outBones[i], 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f);
+
+    HandSimHand hand{};
+    hand.role = role;
+
+    outBones[eBone_Root] = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } };
+    outBones[eBone_Wrist] = { { -0.034038f, 0.036503f, 0.164722f, 1.0f }, { -0.055147f, -0.078608f, -0.920279f, 0.379296f } };
+
+    if (role == vr::TrackedControllerRole_RightHand) {
+        outBones[eBone_Wrist].position.v[0] *= -1.f;
+        outBones[eBone_Wrist].orientation.y *= -1.f;
+        outBones[eBone_Wrist].orientation.z *= -1.f;
     }
 
-    SetBone(outBones[0], 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f);
-    SetBone(outBones[1], 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f);
+    for (auto& finger : hand.fingers) {
+        finger.proximal.swing[1] = DEG_TO_RAD(10.f);
+        finger.intermediate.rotation = DEG_TO_RAD(5.f);
+        finger.distal.rotation = DEG_TO_RAD(5.f);
+    }
+
+    hand.thumb.metacarpal.swing[0] = DEG_TO_RAD(10.f);
+    hand.thumb.metacarpal.swing[1] = DEG_TO_RAD(40.f);
+    hand.thumb.metacarpal.twist = DEG_TO_RAD(70.f);
+
+    hand.fingers[0].metacarpal.swing[1] = DEG_TO_RAD(13.f);
+    hand.fingers[1].metacarpal.swing[1] = DEG_TO_RAD(0.f);
+    hand.fingers[2].metacarpal.swing[1] = DEG_TO_RAD(-15.f);
+    hand.fingers[3].metacarpal.swing[1] = DEG_TO_RAD(-27.f);
 
     float curlThumb  = (handData.curls.thumb < 0.0f) ? 0.0f : ((handData.curls.thumb > 1.0f) ? 1.0f : handData.curls.thumb);
     float curlIndex  = (handData.curls.index < 0.0f) ? 0.0f : ((handData.curls.index > 1.0f) ? 1.0f : handData.curls.index);
@@ -312,68 +465,47 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float splayRing   = handData.splays.ring;
     float splayPinky  = handData.splays.pinky;
 
-    if (handData.isPinching == 1) {
-        if (curlThumb < 0.85f) curlThumb = 0.85f;
-        if (curlIndex < 0.90f) curlIndex = 0.90f;
+    hand.thumb.metacarpal.swing[0] += DEG_TO_RAD(curlThumb * 5.f);
+    hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 5.f);
+    hand.thumb.proximal.swing[0] += DEG_TO_RAD(curlThumb * 90.f);
+    hand.thumb.proximal.swing[1] += DEG_TO_RAD(splayThumb * 20.f);
+    hand.thumb.distal.rotation += DEG_TO_RAD(curlThumb * 90.f);
+
+    float curls[4] = { curlIndex, curlMiddle, curlRing, curlPinky };
+    float splays[4] = { splayIndex, splayMiddle, splayRing, splayPinky };
+
+    for (int i = 0; i < 4; ++i) {
+        hand.fingers[i].metacarpal.swing[0] += DEG_TO_RAD(curls[i] * 5.f);
+        hand.fingers[i].proximal.swing[0] += DEG_TO_RAD(curls[i] * 90.f);
+        hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 15.f);
+        hand.fingers[i].intermediate.rotation += DEG_TO_RAD(curls[i] * 80.f);
+        hand.fingers[i].distal.rotation += DEG_TO_RAD(curls[i] * 80.f);
     }
 
-    // 1. Thumb (Opposition + Multi-joint curl)
-    Quaternionf qThumbRoot = GetBoneRotationMultiAxis(curlThumb * 0.40f, splayThumb * 0.35f, curlThumb * 0.25f);
-    Quaternionf qThumbMP   = GetBoneRotationMultiAxis(curlThumb * 0.45f, 0.0f, 0.0f);
-    Quaternionf qThumbIP   = GetBoneRotationMultiAxis(curlThumb * 0.35f, 0.0f, 0.0f);
+    ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.thumb.metacarpal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][0], outBones[eBone_Thumb0]);
+    ComputeBoneTransform(role, QuatFromSwingTwist(hand.thumb.proximal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][1], outBones[eBone_Thumb1]);
+    ComputeBoneTransform(role, QuatFromEuler(hand.thumb.distal.rotation, 0.f, 0.f), finger_joint_lengths[0][2], outBones[eBone_Thumb2]);
+    ComputeBoneTransform(role, { 1.f, 0.f, 0.f, 0.f }, finger_joint_lengths[0][3], outBones[eBone_Thumb3]);
 
-    SetBone(outBones[2],  0.030f, -0.015f,  0.025f, qThumbRoot.w, qThumbRoot.x, qThumbRoot.y, qThumbRoot.z);
-    SetBone(outBones[3],  0.000f,  0.000f,  0.035f, qThumbMP.w, qThumbMP.x, qThumbMP.y, qThumbMP.z);
-    SetBone(outBones[4],  0.000f,  0.000f,  0.030f, qThumbIP.w, qThumbIP.x, qThumbIP.y, qThumbIP.z);
-    SetBone(outBones[5],  0.000f,  0.000f,  0.025f, 1.0f, 0.0f, 0.0f, 0.0f);
+    for (int finger = 0; finger < 4; finger++) {
+        ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.fingers[finger].metacarpal.swing, hand.fingers[finger].metacarpal.twist),
+            finger_joint_lengths[finger + 1][0], outBones[CalculateBoneTransformPositionFromFinger(finger, 0)]);
 
-    // 2. Index (Splay + 3-joint progressive curl)
-    Quaternionf qIndexMCP = GetBoneRotationMultiAxis(curlIndex * 0.50f, splayIndex * 0.30f, 0.0f);
-    Quaternionf qIndexPIP = GetBoneRotationMultiAxis(curlIndex * 0.35f, 0.0f, 0.0f);
-    Quaternionf qIndexDIP = GetBoneRotationMultiAxis(curlIndex * 0.20f, 0.0f, 0.0f);
+        ComputeBoneTransform(role, QuatFromSwingTwist(hand.fingers[finger].proximal.swing, hand.fingers[finger].proximal.twist), finger_joint_lengths[finger + 1][1],
+            outBones[CalculateBoneTransformPositionFromFinger(finger, 1)]);
 
-    SetBone(outBones[6],  0.000f,  0.000f,  0.000f, 1.0f, 0.0f, 0.0f, 0.0f);
-    SetBone(outBones[7],  0.025f,  0.000f,  0.065f, qIndexMCP.w, qIndexMCP.x, qIndexMCP.y, qIndexMCP.z);
-    SetBone(outBones[8],  0.000f,  0.000f,  0.040f, qIndexPIP.w, qIndexPIP.x, qIndexPIP.y, qIndexPIP.z);
-    SetBone(outBones[9],  0.000f,  0.000f,  0.030f, qIndexDIP.w, qIndexDIP.x, qIndexDIP.y, qIndexDIP.z);
-    SetBone(outBones[10], 0.000f,  0.000f,  0.022f, 1.0f, 0.0f, 0.0f, 0.0f);
+        ComputeBoneTransform(role, QuatFromEuler(hand.fingers[finger].intermediate.rotation, 0.f, 0.f), finger_joint_lengths[finger + 1][2],
+            outBones[CalculateBoneTransformPositionFromFinger(finger, 2)]);
 
-    // 3. Middle (Splay + 3-joint progressive curl)
-    Quaternionf qMidMCP = GetBoneRotationMultiAxis(curlMiddle * 0.52f, splayMiddle * 0.15f, 0.0f);
-    Quaternionf qMidPIP = GetBoneRotationMultiAxis(curlMiddle * 0.36f, 0.0f, 0.0f);
-    Quaternionf qMidDIP = GetBoneRotationMultiAxis(curlMiddle * 0.20f, 0.0f, 0.0f);
+        ComputeBoneTransform(role, QuatFromEuler(hand.fingers[finger].distal.rotation, 0.f, 0.f), finger_joint_lengths[finger + 1][3],
+            outBones[CalculateBoneTransformPositionFromFinger(finger, 3)]);
 
-    SetBone(outBones[11], 0.000f,  0.000f,  0.000f, 1.0f, 0.0f, 0.0f, 0.0f);
-    SetBone(outBones[12], 0.000f,  0.000f,  0.070f, qMidMCP.w, qMidMCP.x, qMidMCP.y, qMidMCP.z);
-    SetBone(outBones[13], 0.000f,  0.000f,  0.045f, qMidPIP.w, qMidPIP.x, qMidPIP.y, qMidPIP.z);
-    SetBone(outBones[14], 0.000f,  0.000f,  0.032f, qMidDIP.w, qMidDIP.x, qMidDIP.y, qMidDIP.z);
-    SetBone(outBones[15], 0.000f,  0.000f,  0.024f, 1.0f, 0.0f, 0.0f, 0.0f);
+        ComputeBoneTransform(role, { 1.f, 0.f, 0.f, 0.f }, finger_joint_lengths[finger + 1][4], outBones[CalculateBoneTransformPositionFromFinger(finger, 4)]);
+    }
 
-    // 4. Ring (Splay + 3-joint progressive curl)
-    Quaternionf qRingMCP = GetBoneRotationMultiAxis(curlRing * 0.52f, splayRing * 0.25f, 0.0f);
-    Quaternionf qRingPIP = GetBoneRotationMultiAxis(curlRing * 0.36f, 0.0f, 0.0f);
-    Quaternionf qRingDIP = GetBoneRotationMultiAxis(curlRing * 0.20f, 0.0f, 0.0f);
-
-    SetBone(outBones[16], 0.000f,  0.000f,  0.000f, 1.0f, 0.0f, 0.0f, 0.0f);
-    SetBone(outBones[17], -0.020f, 0.000f,  0.065f, qRingMCP.w, qRingMCP.x, qRingMCP.y, qRingMCP.z);
-    SetBone(outBones[18],  0.000f, 0.000f,  0.038f, qRingPIP.w, qRingPIP.x, qRingPIP.y, qRingPIP.z);
-    SetBone(outBones[19],  0.000f, 0.000f,  0.028f, qRingDIP.w, qRingDIP.x, qRingDIP.y, qRingDIP.z);
-    SetBone(outBones[20],  0.000f, 0.000f,  0.022f, 1.0f, 0.0f, 0.0f, 0.0f);
-
-    // 5. Pinky (Splay + 3-joint progressive curl)
-    Quaternionf qPinkyMCP = GetBoneRotationMultiAxis(curlPinky * 0.50f, splayPinky * 0.35f, 0.0f);
-    Quaternionf qPinkyPIP = GetBoneRotationMultiAxis(curlPinky * 0.35f, 0.0f, 0.0f);
-    Quaternionf qPinkyDIP = GetBoneRotationMultiAxis(curlPinky * 0.20f, 0.0f, 0.0f);
-
-    SetBone(outBones[21], 0.000f,  0.000f,  0.000f, 1.0f, 0.0f, 0.0f, 0.0f);
-    SetBone(outBones[22], -0.040f, -0.010f, 0.055f, qPinkyMCP.w, qPinkyMCP.x, qPinkyMCP.y, qPinkyMCP.z);
-    SetBone(outBones[23],  0.000f,  0.000f, 0.030f, qPinkyPIP.w, qPinkyPIP.x, qPinkyPIP.y, qPinkyPIP.z);
-    SetBone(outBones[24],  0.000f,  0.000f, 0.022f, qPinkyDIP.w, qPinkyDIP.x, qPinkyDIP.y, qPinkyDIP.z);
-    SetBone(outBones[25],  0.000f,  0.000f, 0.018f, 1.0f, 0.0f, 0.0f, 0.0f);
-
-    outBones[26] = outBones[5];
-    outBones[27] = outBones[10];
-    outBones[28] = outBones[15];
-    outBones[29] = outBones[20];
-    outBones[30] = outBones[25];
+    outBones[eBone_Aux_Thumb] = outBones[eBone_Thumb3];
+    outBones[eBone_Aux_IndexFinger] = outBones[eBone_IndexFinger4];
+    outBones[eBone_Aux_MiddleFinger] = outBones[eBone_MiddleFinger4];
+    outBones[eBone_Aux_RingFinger] = outBones[eBone_RingFinger4];
+    outBones[eBone_Aux_PinkyFinger] = outBones[eBone_PinkyFinger4];
 }

@@ -1,64 +1,66 @@
 {
-  "json_version": 2,
-  "controller_type": "iphonevr_hand_controller",
-  "category": "controller",
-  "resource_name": "iPhoneVR Hand Controller",
-  "input_bindings": {
-    "/user/hand/left/input/skeleton/left": {
-      "output": "/actions/default/in/skeleton_left"
+  "jsonid": "input_profile",
+  "controller_type": "knuckles",
+  "input_bindingui_mode": "controller_handed",
+  "input_source": {
+    "/input/skeleton/left": {
+      "type": "skeleton",
+      "skeleton": "/skeleton/hand/left",
+      "side": "left"
     },
-    "/user/hand/right/input/skeleton/right": {
-      "output": "/actions/default/in/skeleton_right"
+    "/input/skeleton/right": {
+      "type": "skeleton",
+      "skeleton": "/skeleton/hand/right",
+      "side": "right"
     },
-    "/user/hand/left/input/trigger/click": {
-      "output": "/actions/default/in/interact"
+    "/input/system/click": {
+      "type": "button",
+      "order": 1
     },
-    "/user/hand/right/input/trigger/click": {
-      "output": "/actions/default/in/interact"
+    "/input/a/click": {
+      "type": "button",
+      "order": 2
     },
-    "/user/hand/left/input/trigger/value": {
-      "output": "/actions/default/in/trigger_left"
+    "/input/b/click": {
+      "type": "button",
+      "order": 3
     },
-    "/user/hand/right/input/trigger/value": {
-      "output": "/actions/default/in/trigger_right"
+    "/input/x/click": {
+      "type": "button",
+      "order": 4
     },
-    "/user/hand/left/input/grip/click": {
-      "output": "/actions/default/in/grab"
+    "/input/y/click": {
+      "type": "button",
+      "order": 5
     },
-    "/user/hand/right/input/grip/click": {
-      "output": "/actions/default/in/grab"
+    "/input/trigger/click": {
+      "type": "button",
+      "order": 6
     },
-    "/user/hand/left/input/x/click": {
-      "output": "/actions/default/in/button_x"
+    "/input/trigger/value": {
+      "type": "trigger",
+      "order": 7
     },
-    "/user/hand/left/input/y/click": {
-      "output": "/actions/default/in/button_y"
+    "/input/grip/click": {
+      "type": "button",
+      "order": 8
     },
-    "/user/hand/right/input/a/click": {
-      "output": "/actions/default/in/button_a"
+    "/input/grip/value": {
+      "type": "trigger",
+      "order": 9
     },
-    "/user/hand/right/input/b/click": {
-      "output": "/actions/default/in/button_b"
+    "/input/thumbstick/x": {
+      "type": "joystick",
+      "order": 10
     },
-    "/user/hand/left/input/thumbstick": {
-      "output": "/actions/default/in/move"
+    "/input/thumbstick/y": {
+      "type": "joystick",
+      "order": 11
     },
-    "/user/hand/right/input/thumbstick": {
-      "output": "/actions/default/in/turn"
-    },
-    "/user/hand/left/input/thumbstick/click": {
-      "output": "/actions/default/in/sprint"
-    },
-    "/user/hand/right/input/thumbstick/click": {
-      "output": "/actions/default/in/snap_turn"
-    },
-    "/user/hand/left/input/system/click": {
-      "output": "/actions/default/in/system"
-    },
-    "/user/hand/right/input/system/click": {
-      "output": "/actions/default/in/system"
+    "/input/thumbstick/click": {
+      "type": "button",
+      "order": 12
     }
   },
-  "skeleton_path": "/user/hand/left/input/skeleton/left",
-  "skeleton_right_path": "/user/hand/right/input/skeleton/right"
+  "default_bindings": []
 }
