@@ -22,7 +22,7 @@ struct CoordinateConfig {
     float offsetZ = 0.0f;
 };
 
-class HMDDeviceDriver : public vr::ITrackedDeviceServerDriver, public vr::IVRDisplayComponent {
+class HMDDeviceDriver : public vr::ITrackedDeviceServerDriver, public vr::IVRDisplayComponent, public vr::IVRVirtualDisplay {
 public:
     HMDDeviceDriver();
     virtual ~HMDDeviceDriver();
@@ -35,9 +35,14 @@ public:
     virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
     virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
+    // IVRVirtualDisplay (iVRy / ALVR: SteamVR Direct GPU Texture Present)
+    virtual void Present(const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize) override;
+    virtual void WaitForPresent() override {}
+    virtual bool GetTimeSinceLastVsync(float *pfSecondsSinceLastVsync, uint64_t *pulFrameCounter) override { return false; }
+
     // IVRDisplayComponent
     virtual void GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) override;
-    virtual bool IsDisplayOnDesktop() override { return true; }
+    virtual bool IsDisplayOnDesktop() override { return false; }
     virtual bool IsDisplayRealDisplay() override { return false; }
     virtual void GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t* pnHeight) override;
     virtual void GetEyeOutputViewport(vr::EVREye eEye, uint32_t* pnX, uint32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) override;

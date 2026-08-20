@@ -45,52 +45,16 @@ struct ContentView: View {
             Color.black.edgesIgnoringSafeArea(.all)
 
             if isStreaming {
-                // VR HMD レンダリング ＆ 6DoF カメラトラッキング画面
-                ZStack(alignment: .topLeading) {
+                // VR HMD 純粋フルスクリーンVRレンダリング画面（オーバーレイ完全排除）
+                ZStack(alignment: .bottomTrailing) {
                     VRRenderViewRepresentable(hostIP: targetIP)
                         .edgesIgnoringSafeArea(.all)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Circle().fill(Color.green).frame(width: 8, height: 8)
-                            Text("MOONLIGHT VR SBS & 6DOF / 21-JOINT ACTIVE")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.green)
-                        }
-                        Text("Head Pos: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.white)
-                        Text("Gamepad: \(controllerManager.controllerStatusDescription)")
-                            .font(.system(size: 10))
-                            .foregroundColor(controllerManager.isConnected ? .cyan : .gray)
-                        Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked (Curl: \(String(format: "%.2f", trackerManager.leftHandData?.curls.index ?? 0)))" : "Searching...")")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white)
-                        Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked (Curl: \(String(format: "%.2f", trackerManager.rightHandData?.curls.index ?? 0)))" : "Searching...")")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white)
-                    }
-                    .padding(8)
-                    .background(Color.black.opacity(0.75))
-                    .cornerRadius(8)
-                    .padding()
-
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button(action: toggleStreaming) {
-                                Text("Exit VR Mode")
-                                    .font(.caption)
-                                    .bold()
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(Color.red.opacity(0.85))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                            }
-                            .padding()
-                        }
+                    Button(action: toggleStreaming) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color.white.opacity(0.3))
+                            .padding(16)
                     }
                 }
             } else {

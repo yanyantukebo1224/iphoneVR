@@ -18,62 +18,16 @@ struct MoonlightVRMainView: View {
                 Color(red: 0.07, green: 0.08, blue: 0.11).edgesIgnoringSafeArea(.all)
 
                 if isVRStreamingActive {
-                    // VR HMD ストリーミングレンダリング画面
-                    ZStack(alignment: .topLeading) {
+                    // VR HMD 純粋フルスクリーンVRレンダリング画面（オーバーレイ完全排除）
+                    ZStack(alignment: .bottomTrailing) {
                         MoonlightNativeStreamViewRepresentable()
                             .edgesIgnoringSafeArea(.all)
 
-                        // リアルタイム 6DoF / VR オーバーレイステータス
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 8, height: 8)
-                                Text("MOONLIGHT VR STREAMING & 6DOF ACTIVE")
-                                    .font(.caption)
-                                    .foregroundColor(.green)
-                                    .bold()
-                            }
-                            Text("Head Position: \(String(format: "%.2f, %.2f, %.2f", trackerManager.headPosition.x, trackerManager.headPosition.y, trackerManager.headPosition.z))")
-                                .font(.caption2)
-                                .foregroundColor(.white)
-                            Text("Gamepad / Joy-Con: \(GameControllerManager.shared.controllerStatusDescription)")
-                                .font(.caption2)
-                                .foregroundColor(GameControllerManager.shared.isConnected ? .green : .gray)
-                            Text("Left Hand: \(trackerManager.leftHandData?.isTracked == 1 ? "Tracked (Curl: \(String(format: "%.2f", trackerManager.leftHandData?.curls.index ?? 0)))" : "Searching...")")
-                                .font(.caption2)
-                                .foregroundColor(.white)
-                            Text("Right Hand: \(trackerManager.rightHandData?.isTracked == 1 ? "Tracked (Curl: \(String(format: "%.2f", trackerManager.rightHandData?.curls.index ?? 0)))" : "Searching...")")
-                                .font(.caption2)
-                                .foregroundColor(.white)
-                            Text("UDP Target: \(vrSettings.targetIP):\(vrSettings.udpPort)")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
-                        }
-                        .padding(10)
-                        .background(Color.black.opacity(0.80))
-                        .cornerRadius(10)
-                        .padding()
-
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                Button(action: stopVRStreaming) {
-                                    HStack {
-                                        Image(systemName: "xmark.circle.fill")
-                                        Text("Disconnect VR Session")
-                                            .bold()
-                                    }
-                                    .font(.caption)
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 14)
-                                    .background(Color.red.opacity(0.85))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                                }
-                                .padding()
-                            }
+                        Button(action: stopVRStreaming) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(Color.white.opacity(0.3))
+                                .padding(16)
                         }
                     }
                 } else {

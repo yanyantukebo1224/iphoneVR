@@ -34,7 +34,7 @@ vr::EVRInitError HMDDeviceDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_UserIpdMeters_Float, 0.063f);
     vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_DisplayFrequency_Float, 60.0f);
     vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_SecondsFromVsyncToPhotons_Float, 0.011f);
-    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, true);
+    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_IsOnDesktop_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_HasDisplayComponent_Bool, true);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
@@ -61,7 +61,16 @@ void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
     if (std::strcmp(pchComponentNameAndVersion, vr::IVRDisplayComponent_Version) == 0) {
         return static_cast<vr::IVRDisplayComponent*>(this);
     }
+    if (std::strcmp(pchComponentNameAndVersion, vr::IVRVirtualDisplay_Version) == 0) {
+        return static_cast<vr::IVRVirtualDisplay*>(this);
+    }
     return nullptr;
+}
+
+void HMDDeviceDriver::Present(const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize) {
+    if (pPresentInfo && pPresentInfo->backbufferTextureHandle) {
+        // GPU Direct Present
+    }
 }
 
 void HMDDeviceDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
