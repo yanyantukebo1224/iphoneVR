@@ -294,7 +294,21 @@ HandControllerDriver::HandControllerDriver(vr::ETrackedControllerRole role)
     m_pose.qDriverFromHeadRotation.w = 1.0;
 }
 
-HandControllerDriver::~HandControllerDriver() {}
+HandControllerDriver::~HandControllerDriver() {
+    m_poseThreadRunning = false;
+    if (m_poseThread.joinable()) {
+        m_poseThread.join();
+    }
+}
+
+void HandControllerDriver::PoseLoop() {
+    while (m_poseThreadRunning) {
+        if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
+            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(11)); // ~90Hz
+    }
+}
 
 vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     m_unObjectId = unObjectId;
@@ -357,6 +371,9 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{0.0f, 0.0f, 0.0f};
 
     UpdateHandPose(dummyHand, Vector3f{0.0f, 1.65f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
+
+    m_poseThreadRunning = true;
+    m_poseThread = std::thread(&HandControllerDriver::PoseLoop, this);
 
     return vr::VRInitError_None;
 }

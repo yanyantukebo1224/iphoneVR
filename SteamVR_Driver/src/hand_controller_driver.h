@@ -5,6 +5,8 @@
 #include "tracking_protocol.h"
 #include <string>
 #include <chrono>
+#include <thread>
+#include <atomic>
 
 class HandControllerDriver : public vr::ITrackedDeviceServerDriver {
 public:
@@ -27,10 +29,15 @@ public:
     );
 
 private:
+    void PoseLoop();
+
     vr::ETrackedControllerRole m_role;
     vr::DriverPose_t m_pose;
     uint32_t m_unObjectId;
     vr::PropertyContainerHandle_t m_ulPropertyContainer;
+
+    std::atomic<bool> m_poseThreadRunning{false};
+    std::thread m_poseThread;
 
     vr::VRInputComponentHandle_t m_ulSkeletonComponent;
     vr::VRInputComponentHandle_t m_ulTriggerClickComponent;

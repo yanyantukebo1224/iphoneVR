@@ -91,11 +91,13 @@ void ScreenStreamer::CaptureLoop() {
     while (m_running) {
         auto startTime = std::chrono::steady_clock::now();
 
-        auto targetHwnd = FindWindowA(NULL, "Headset Window");
+        auto targetHwnd = FindWindowA(NULL, "VRChat");
+        if (!targetHwnd) targetHwnd = FindWindowA(NULL, "Headset Window");
         if (!targetHwnd) targetHwnd = FindWindowW(NULL, L"VRビュー");
         if (!targetHwnd) targetHwnd = FindWindowA(NULL, "VR View");
         if (!targetHwnd) targetHwnd = FindWindowA("ValveVRUnlitWindow", NULL);
         if (!targetHwnd) targetHwnd = FindWindowA("ValveVRScene", NULL);
+        if (!targetHwnd) targetHwnd = FindWindowA(NULL, "SteamVR Home");
 
         int captureX = 0;
         int captureY = 0;
@@ -109,7 +111,7 @@ void ScreenStreamer::CaptureLoop() {
                 ClientToScreen(targetHwnd, &pt);
                 int w = rc.right - rc.left;
                 int h = rc.bottom - rc.top;
-                if (w > 100 && h > 100) {
+                if (w > 200 && h > 200) {
                     captureX = pt.x;
                     captureY = pt.y;
                     captureW = w;
