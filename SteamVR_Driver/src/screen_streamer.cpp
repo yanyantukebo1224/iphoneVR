@@ -1,8 +1,6 @@
-#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
-#include <ws2tcpip.h>
 #include <windows.h>
-#include <objidl.h>
+#include <ws2tcpip.h>
 #include <gdiplus.h>
 #include "screen_streamer.h"
 #include <iostream>
@@ -70,37 +68,49 @@ void ScreenStreamer::CaptureLoop() {
     encoderParams.Parameter[0].Guid = EncoderQuality;
     encoderParams.Parameter[0].Type = EncoderParameterValueTypeLong;
     encoderParams.Parameter[0].NumberOfValues = 1;
-    ULONG quality = 75;
+    ULONG quality = 80;
     encoderParams.Parameter[0].Value = &quality;
 
     while (m_running) {
         auto startTime = std::chrono::steady_clock::now();
 
-        HWND hwndTarget = FindWindowA(NULL, "Headset Window");
-        HDC hdcTarget = NULL;
-        int screenW = 0;
-        int screenH = 0;
-
-        if (hwndTarget != NULL && IsWindow(hwndTarget)) {
-            RECT rc;
-            GetClientRect(hwndTarget, &rc);
-            screenW = rc.right - rc.left;
-            screenH = rc.bottom - rc.top;
-            hdcTarget = GetDC(hwndTarget);
+        auto targetHwnd = FindWindowA(NULL, "Headset Window");
+        if (!targetHwnd) {
+            targetHwnd = FindWindowA("ValveVRUnlitWindow", NULL);
+        }
+        if (!targetHwnd) {
+            targetHwnd = FindWindowA("ValveVRScene", NULL);
         }
 
-        if (hdcTarget == NULL || screenW <= 0 || screenH <= 0) {
-            screenW = GetSystemMetrics(SM_CXSCREEN);
-            screenH = GetSystemMetrics(SM_CYSCREEN);
-            hdcTarget = GetDC(NULL);
-        }
+        HDC hdcScreen = GetDC(NULL);
+        if (hdcScreen != NULL) {
+            int captureX = 0;
+            int captureY = 0;
+            int captureW = GetSystemMetrics(SM_CXSCREEN);
+            int captureH = GetSystemMetrics(SM_CYSCREEN);
 
-        if (hdcTarget != NULL && screenW > 0 && screenH > 0) {
-            HDC hdcMem = CreateCompatibleDC(hdcTarget);
-            HBITMAP hBitmap = CreateCompatibleBitmap(hdcTarget, screenW, screenH);
+            if (targetHwnd != NULL && IsWindow(targetHwnd)) {
+                RECT rc;
+                if (GetClientRect(targetHwnd, &rc)) {
+                    POINT pt = { 0, 0 };
+                    ClientToScreen(targetHwnd, &pt);
+                    int w = rc.right - rc.left;
+                    int h = rc.bottom - rc.top;
+                    if (w > 100 && h > 100) {
+                        captureX = pt.x;
+                        captureY = pt.y;
+                        captureW = w;
+                        captureH = h;
+                    }
+                }
+            }
+
+            HDC hdcMem = CreateCompatibleDC(hdcScreen);
+            HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, captureW, captureH);
             HGDIOBJ hOldBitmap = SelectObject(hdcMem, hBitmap);
 
-            BitBlt(hdcMem, 0, 0, screenW, screenH, hdcTarget, 0, 0, SRCCOPY);
+            // デスクトップサーフェスから Headset Window 領域を確実に高速転送
+            BitBlt(hdcMem, 0, 0, captureW, captureH, hdcScreen, captureX, captureY, SRCCOPY);
 
             Bitmap bitmap(hBitmap, NULL);
             IStream* pStream = NULL;
@@ -127,7 +137,7 @@ void ScreenStreamer::CaptureLoop() {
             SelectObject(hdcMem, hOldBitmap);
             DeleteObject(hBitmap);
             DeleteDC(hdcMem);
-            ReleaseDC(hwndTarget ? hwndTarget : NULL, hdcTarget);
+            ReleaseDC(NULL, hdcScreen);
         }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count();

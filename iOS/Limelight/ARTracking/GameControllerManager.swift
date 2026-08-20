@@ -179,14 +179,20 @@ class GameControllerManager: ObservableObject {
                         mask |= ControllerButtonBits.btnTriggerClick
                         inputData.triggerValue = max(inputData.triggerValue, Float(button.value))
                     }
-                    if key.contains("shoulder") || key.contains("button l") || key.contains("button r") {
+                    if key.contains("shoulder") || key.contains("button l") || key.contains("button r") || key.contains("sl") || key.contains("sr") {
                         mask |= ControllerButtonBits.btnGripClick
                         inputData.gripValue = 1.0
                     }
+                    if key.contains("home") || key.contains("capture") || key.contains("menu") || key.contains("options") || key.contains("minus") || key.contains("plus") || key.contains("share") || key.contains("start") || key.contains("select") {
+                        mask |= ControllerButtonBits.btnSystem
+                    }
+                    if key.contains("thumbstick") || key.contains("stick button") {
+                        mask |= ControllerButtonBits.btnThumbstickClick
+                    }
                 } else if let axis = element as? GCControllerAxisInput {
                     let key = elementName.lowercased()
-                    if key.contains("x") && abs(axis.value) > 0.05 { inputData.stickX = Float(axis.value) }
-                    if key.contains("y") && abs(axis.value) > 0.05 { inputData.stickY = Float(axis.value) }
+                    if (key.contains("x") || key.contains("horizontal")) && abs(axis.value) > 0.05 { inputData.stickX = Float(axis.value) }
+                    if (key.contains("y") || key.contains("vertical")) && abs(axis.value) > 0.05 { inputData.stickY = Float(axis.value) }
                 }
             }
         }
