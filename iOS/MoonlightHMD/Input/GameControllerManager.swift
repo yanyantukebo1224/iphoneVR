@@ -82,7 +82,7 @@ class GameControllerManager: ObservableObject {
         }
     }
 
-    func getInputData(for chirality: UInt8) -> ControllerInputData {
+    func getInputData(for chirality: UInt32) -> ControllerInputData {
         var inputData = ControllerInputData()
         let controllers = GCController.controllers()
         guard !controllers.isEmpty else {

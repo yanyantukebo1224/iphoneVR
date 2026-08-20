@@ -163,7 +163,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         guard let recognizedPoints = try? observation.recognizedPoints(.all),
               let wristPoint = recognizedPoints[.wrist] else { return nil }
 
-        var isPinching: UInt8 = 0
+        var isPinching: UInt32 = 0
         var pinchDist: Float = 1.0
 
         let isLeft = (chirality == 0)
