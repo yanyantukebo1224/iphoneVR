@@ -1,7 +1,12 @@
 {
   "jsonid": "input_profile",
   "controller_type": "knuckles",
+  "device_class": "TrackedDeviceClass_Controller",
+  "resource_root": "iphonevr",
+  "driver_name": "iphonevr",
+  "legacy_binding": "{iphonevr}/input/legacy_bindings_iphonevr.json",
   "input_bindingui_mode": "controller_handed",
+  "should_show_binding_errors": false,
   "input_source": {
     "/input/skeleton/left": {
       "type": "skeleton",
@@ -13,54 +18,55 @@
       "skeleton": "/skeleton/hand/right",
       "side": "right"
     },
-    "/input/system/click": {
+    "/input/system": {
       "type": "button",
+      "click": true,
+      "touch": false,
       "order": 1
     },
-    "/input/a/click": {
+    "/input/a": {
       "type": "button",
+      "click": true,
+      "touch": false,
       "order": 2
     },
-    "/input/b/click": {
+    "/input/b": {
       "type": "button",
+      "click": true,
+      "touch": false,
       "order": 3
     },
-    "/input/x/click": {
+    "/input/x": {
       "type": "button",
+      "click": true,
+      "touch": false,
       "order": 4
     },
-    "/input/y/click": {
+    "/input/y": {
       "type": "button",
+      "click": true,
+      "touch": false,
       "order": 5
     },
-    "/input/trigger/click": {
-      "type": "button",
+    "/input/trigger": {
+      "type": "trigger",
+      "click": true,
+      "value": true,
+      "touch": false,
       "order": 6
     },
-    "/input/trigger/value": {
+    "/input/grip": {
       "type": "trigger",
+      "click": true,
+      "value": true,
+      "touch": false,
       "order": 7
     },
-    "/input/grip/click": {
-      "type": "button",
+    "/input/thumbstick": {
+      "type": "joystick",
+      "click": true,
+      "touch": false,
       "order": 8
-    },
-    "/input/grip/value": {
-      "type": "trigger",
-      "order": 9
-    },
-    "/input/thumbstick/x": {
-      "type": "joystick",
-      "order": 10
-    },
-    "/input/thumbstick/y": {
-      "type": "joystick",
-      "order": 11
-    },
-    "/input/thumbstick/click": {
-      "type": "button",
-      "order": 12
     }
-  },
-  "default_bindings": []
+  }
 }

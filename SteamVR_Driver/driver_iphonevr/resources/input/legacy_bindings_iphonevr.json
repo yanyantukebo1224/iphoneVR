@@ -1,0 +1,118 @@
+{
+  "app_key": "system.generated.legacy",
+  "bindings": {
+    "/user/hand/left": {
+      "sources": [
+        {
+          "path": "/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/legacy/in/left_trigger"
+            }
+          }
+        },
+        {
+          "path": "/input/grip",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/legacy/in/left_grip"
+            }
+          }
+        },
+        {
+          "path": "/input/thumbstick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/legacy/in/left_joystick"
+            },
+            "click": {
+              "output": "/actions/legacy/in/left_joystick_click"
+            }
+          }
+        },
+        {
+          "path": "/input/x",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/legacy/in/left_application_menu"
+            }
+          }
+        }
+      ],
+      "poses": [
+        {
+          "output": "/actions/legacy/in/left_hand",
+          "path": "/pose/raw"
+        }
+      ],
+      "skeleton": [
+        {
+          "output": "/actions/legacy/in/left_hand_skeleton",
+          "path": "/input/skeleton/left"
+        }
+      ]
+    },
+    "/user/hand/right": {
+      "sources": [
+        {
+          "path": "/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/legacy/in/right_trigger"
+            }
+          }
+        },
+        {
+          "path": "/input/grip",
+          "mode": "trigger",
+          "inputs": {
+            "click": {
+              "output": "/actions/legacy/in/right_grip"
+            }
+          }
+        },
+        {
+          "path": "/input/thumbstick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/legacy/in/right_joystick"
+            },
+            "click": {
+              "output": "/actions/legacy/in/right_joystick_click"
+            }
+          }
+        },
+        {
+          "path": "/input/a",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/legacy/in/right_application_menu"
+            }
+          }
+        }
+      ],
+      "poses": [
+        {
+          "output": "/actions/legacy/in/right_hand",
+          "path": "/pose/raw"
+        }
+      ],
+      "skeleton": [
+        {
+          "output": "/actions/legacy/in/right_hand_skeleton",
+          "path": "/input/skeleton/right"
+        }
+      ]
+    }
+  },
+  "controller_type": "knuckles",
+  "description": "iPhoneVR Default Controller Bindings",
+  "name": "iPhoneVR Default Bindings"
+}
