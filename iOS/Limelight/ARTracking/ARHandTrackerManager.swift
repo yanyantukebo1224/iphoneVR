@@ -261,12 +261,19 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let computeFingerCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
             guard let mcp = recognizedPoints[mcpKey], let tip = recognizedPoints[tipKey] else { return 0.0 }
             let dist = hypot(Float(tip.location.x - mcp.location.x), Float(tip.location.y - mcp.location.y))
-            let rawCurl = (0.15 - dist) / 0.11
+            let rawCurl = (0.15 - dist) / 0.10
             return max(0.0, min(1.0, rawCurl))
         }
 
+        let computeThumbCurl = { () -> Float in
+            guard let tip = recognizedPoints[.thumbTip], let indexMcp = recognizedPoints[.indexMCP] else { return 0.0 }
+            let dist = hypot(Float(tip.location.x - indexMcp.location.x), Float(tip.location.y - indexMcp.location.y))
+            let raw = (0.18 - dist) / 0.12
+            return max(0.0, min(1.0, raw))
+        }
+
         var curls = FingerCurls()
-        curls.thumb = computeFingerCurl(.thumbCMC, .thumbTip)
+        curls.thumb = computeThumbCurl()
         curls.index = computeFingerCurl(.indexMCP, .indexTip)
         curls.middle = computeFingerCurl(.middleMCP, .middleTip)
         curls.ring = computeFingerCurl(.ringMCP, .ringTip)

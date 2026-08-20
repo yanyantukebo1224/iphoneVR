@@ -278,13 +278,21 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let computeFingerCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
             guard let mcp = recognizedPoints[mcpKey], let tip = recognizedPoints[tipKey] else { return 0.0 }
             let dist = hypot(Float(tip.location.x - mcp.location.x), Float(tip.location.y - mcp.location.y))
-            // 指を伸ばした時の距離 (約0.15) から折り曲げた時の距離 (約0.04) への正規化
-            let rawCurl = (0.15 - dist) / 0.11
+            let rawCurl = (0.15 - dist) / 0.10
             return max(0.0, min(1.0, rawCurl))
         }
 
+        // 👍 親指の開き・立ち上がり感度（ピストルポーズ対応）
+        let computeThumbCurl = { () -> Float in
+            guard let tip = recognizedPoints[.thumbTip], let indexMcp = recognizedPoints[.indexMCP] else { return 0.0 }
+            let dist = hypot(Float(tip.location.x - indexMcp.location.x), Float(tip.location.y - indexMcp.location.y))
+            // 親指が立った状態（約0.18以上）= 0.0, 握り込んだ状態（約0.06以下）= 1.0
+            let raw = (0.18 - dist) / 0.12
+            return max(0.0, min(1.0, raw))
+        }
+
         var curls = FingerCurls()
-        curls.thumb = computeFingerCurl(.thumbCMC, .thumbTip)
+        curls.thumb = computeThumbCurl()
         curls.index = computeFingerCurl(.indexMCP, .indexTip)
         curls.middle = computeFingerCurl(.middleMCP, .middleTip)
         curls.ring = computeFingerCurl(.ringMCP, .ringTip)
