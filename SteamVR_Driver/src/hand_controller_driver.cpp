@@ -69,11 +69,12 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{driver_iphonevr}/resources/input/iphonevr_controller_profile.json");
 
     const char* skelComponentPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
+    const char* skelTypePath = isLeft ? "/skeleton/hand/left" : "/skeleton/hand/right";
     vr::VRDriverInput()->CreateSkeletonComponent(
         m_ulPropertyContainer,
         skelComponentPath,
-        skelComponentPath,
-        isLeft ? "/skeleton/hand/left" : "/skeleton/hand/right",
+        skelTypePath,
+        skelTypePath,
         vr::VRSkeletalTracking_Full,
         nullptr,
         0,
