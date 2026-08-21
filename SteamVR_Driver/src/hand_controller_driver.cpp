@@ -65,7 +65,7 @@ static const float c_fingerSplayDefault[5][5] = {
     { 0.02f, 0.073f, 0.045f, 0.03f, 0.03f }
 };
 
-static inline void RotateVectorByQuat(const vr::HmdQuaternion_t& q, const vr::HmdVector3_t& v, float outV[3]) {
+static inline vr::HmdVector3_t RotateVectorByQuat(const vr::HmdQuaternion_t& q, const vr::HmdVector3_t& v) {
     double qvW = 0.0, qvX = (double)v.v[0], qvY = (double)v.v[1], qvZ = (double)v.v[2];
     double qCW = q.w, qCX = -q.x, qCY = -q.y, qCZ = -q.z;
 
@@ -74,9 +74,11 @@ static inline void RotateVectorByQuat(const vr::HmdQuaternion_t& q, const vr::Hm
     double tY = q.w * qvY - q.x * qvZ + 0.0 + q.z * qvX;
     double tZ = q.w * qvZ + q.x * qvY - q.y * qvX + 0.0;
 
-    outV[0] = (float)(tW * qCX + tX * qCW + tY * qCZ - tZ * qCY);
-    outV[1] = (float)(tW * qCY - tX * qCZ + tY * qCW + tZ * qCX);
-    outV[2] = (float)(tW * qCZ + tX * qCY - tY * qCX + tZ * qCW);
+    vr::HmdVector3_t res;
+    res.v[0] = (float)(tW * qCX + tX * qCW + tY * qCZ - tZ * qCY);
+    res.v[1] = (float)(tW * qCY - tX * qCZ + tY * qCW + tZ * qCX);
+    res.v[2] = (float)(tW * qCZ + tX * qCY - tY * qCX + tZ * qCW);
+    return res;
 }
 
 static void ComputeBoneTransform(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const vr::HmdVector3_t& position, vr::VRBoneTransform_t& out_transform) {
@@ -276,22 +278,30 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
 
     auto now = std::chrono::steady_clock::now();
 
-    // GlassVR standard controller position offset relative to head
-    m_pose.vecPosition[0] = headPos.x + (isLeft ? -0.18f : 0.18f);
-    m_pose.vecPosition[1] = effectiveHeadY - 0.18f;
-    m_pose.vecPosition[2] = headPos.z - 0.32f;
-
+    // Natural local wrist offset relative to HMD head
+    vr::HmdVector3_t localWrist;
     if (handData.isTracked == 1) {
         m_lastMovementTime = now;
-        m_pose.vecPosition[0] = headPos.x + std::clamp(handData.joints[VISION_JOINT_WRIST].position.x, -0.60f, 0.60f);
-        m_pose.vecPosition[1] = effectiveHeadY + std::clamp(handData.joints[VISION_JOINT_WRIST].position.y, -0.60f, 0.40f);
-        m_pose.vecPosition[2] = headPos.z + std::clamp(handData.joints[VISION_JOINT_WRIST].position.z, -0.75f, -0.15f);
+        localWrist.v[0] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.x, -0.60f, 0.60f);
+        localWrist.v[1] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.y, -0.60f, 0.40f);
+        localWrist.v[2] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.z, -0.75f, -0.15f);
+    } else {
+        localWrist.v[0] = isLeft ? -0.22f : 0.22f;
+        localWrist.v[1] = -0.20f;
+        localWrist.v[2] = -0.35f;
     }
 
-    // GlassVR forward grip orientation (~43 deg Pitch)
-    double pitchAngle = -0.75;
-    double yawAngle = isLeft ? 0.08 : -0.08;
-    double rollAngle = isLeft ? 0.10 : -0.10;
+    // Rotate local wrist offset by head rotation into world space
+    vr::HmdVector3_t worldWrist = RotateVectorByQuat(qHead, localWrist);
+    m_pose.vecPosition[0] = headPos.x + worldWrist.v[0];
+    m_pose.vecPosition[1] = effectiveHeadY + worldWrist.v[1];
+    m_pose.vecPosition[2] = headPos.z + worldWrist.v[2];
+
+    // Perfect Valve Index Knuckles Controller Mesh Ergonomic Orientation Offset
+    // Pitch: -60 deg, Roll: Left +90 deg / Right -90 deg, Yaw: Left +15 deg / Right -15 deg
+    double pitchAngle = -1.047;
+    double yawAngle   = isLeft ? 0.261 : -0.261;
+    double rollAngle  = isLeft ? 1.5707 : -1.5707;
 
     double cy = cos(yawAngle * 0.5);
     double sy = sin(yawAngle * 0.5);
@@ -300,14 +310,13 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     double cr = cos(rollAngle * 0.5);
     double sr = sin(rollAngle * 0.5);
 
-    vr::HmdQuaternion_t qGripOffset;
-    qGripOffset.w = cr * cp * cy + sr * sp * sy;
-    qGripOffset.x = sr * cp * cy - cr * sp * sy;
-    qGripOffset.y = cr * sp * cy + sr * cp * sy;
-    qGripOffset.z = cr * cp * sy - sr * sp * cy;
+    vr::HmdQuaternion_t qKnucklesOffset;
+    qKnucklesOffset.w = cr * cp * cy + sr * sp * sy;
+    qKnucklesOffset.x = sr * cp * cy - cr * sp * sy;
+    qKnucklesOffset.y = cr * sp * cy + sr * cp * sy;
+    qKnucklesOffset.z = cr * cp * sy - sr * sp * cy;
 
-    qGripOffset = QuatMultiply(qHead, qGripOffset);
-    m_pose.qRotation = qGripOffset;
+    m_pose.qRotation = QuatMultiply(qHead, qKnucklesOffset);
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
