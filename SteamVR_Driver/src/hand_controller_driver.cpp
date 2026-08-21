@@ -357,16 +357,9 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     qGripOffset.y = cr * sp * cy + sr * cp * sy;
     qGripOffset.z = cr * cp * sy - sr * sp * cy;
 
-    // Base hand orientation follows HMD direction with ergonomic grip offset
+    // Base hand orientation follows HMD direction with ergonomic forward-pointing grip offset
     vr::HmdQuaternion_t qBaseHand = QuatMultiply(qHead, qGripOffset);
-
-    const Quaternionf& hRot = handData.joints[VISION_JOINT_WRIST].orientation;
-    vr::HmdQuaternion_t qLocalHand = { (double)hRot.w, (double)hRot.x, (double)hRot.y, (double)hRot.z };
-    if (qLocalHand.w == 0.0 && qLocalHand.x == 0.0 && qLocalHand.y == 0.0 && qLocalHand.z == 0.0) {
-        m_pose.qRotation = qBaseHand;
-    } else {
-        m_pose.qRotation = QuatMultiply(qHead, qLocalHand);
-    }
+    m_pose.qRotation = qBaseHand;
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));

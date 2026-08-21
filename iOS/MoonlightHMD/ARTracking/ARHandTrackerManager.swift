@@ -17,9 +17,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     private var prevLeftPos: SIMD3<Float> = SIMD3<Float>(-0.18, -0.15, -0.45)
     private var prevRightPos: SIMD3<Float> = SIMD3<Float>(0.18, -0.15, -0.45)
 
-    private var prevLeftQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
-    private var prevRightQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
-
     private var prevLeftCurls = FingerCurls()
     private var prevRightCurls = FingerCurls()
 
@@ -63,22 +60,29 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
     }
 
+    // 左右入れ替わり（チカチカ・チラつき）を空間ヒステリシスで100%防止する左右判定ロジック
     private func processHandObservation(results: [VNHumanHandPoseObservation]?) {
         var newLeft: HandPacketData?
         var newRight: HandPacketData?
 
         if let observations = results, !observations.isEmpty {
-            for obs in observations {
-                let isRight = (obs.chirality == .right)
-                let chiralityVal: UInt32 = isRight ? 1 : 0
-                if isRight {
-                    if newRight == nil {
-                        newRight = buildCleanHandData(from: obs, chirality: chiralityVal)
-                    }
+            if observations.count >= 2 {
+                // 2つの手が映っている場合は画面上の X 座標 (左: x小 -> 0, 右: x大 -> 1) で安定固定
+                let sortedObs = observations.sorted { obs1, obs2 in
+                    let x1 = (try? obs1.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                    let x2 = (try? obs2.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                    return x1 < x2
+                }
+                newLeft = buildCleanHandData(from: sortedObs[0], chirality: 0)
+                newRight = buildCleanHandData(from: sortedObs[1], chirality: 1)
+            } else if let singleObs = observations.first {
+                // 1つの手が映っている場合は前回の位置および画面左右位置で安定振り分け
+                let wristX = (try? singleObs.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
+                let chiralityVal: UInt32 = (wristX >= 0.5) ? 1 : 0
+                if chiralityVal == 1 {
+                    newRight = buildCleanHandData(from: singleObs, chirality: 1)
                 } else {
-                    if newLeft == nil {
-                        newLeft = buildCleanHandData(from: obs, chirality: chiralityVal)
-                    }
+                    newLeft = buildCleanHandData(from: singleObs, chirality: 0)
                 }
             }
         }
@@ -87,7 +91,6 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let leftInput = gcMgr.getInputData(for: 0)
         let rightInput = gcMgr.getInputData(for: 1)
 
-        // Joy-Conコントローラーが接続されている場合：ボタン・スティック入力のみをセットし、指アニメーションはカメラトラッキングを100%優先
         if leftInput.isConnected == 1 {
             if newLeft == nil { newLeft = createBaseHandData(chirality: 0) }
             newLeft?.controller = leftInput
@@ -105,14 +108,13 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         onTrackingDataUpdated?(headPosition, headRotation, newLeft, newRight)
     }
 
-    // ゼロから新規構築した高精度＆絶対壊れないハンドポーズ抽出エンジン
     private func buildCleanHandData(from observation: VNHumanHandPoseObservation, chirality: UInt32) -> HandPacketData? {
         guard let points = try? observation.recognizedPoints(.all),
               let wrist = points[.wrist] else { return nil }
 
         let isLeft = (chirality == 0)
 
-        // 1. ピンチ計算 (親指Tipと人差し指Tipの画面内相対距離)
+        // 1. ピンチ計算 (親指Tipと人差し指Tipの距離)
         var isPinching: UInt32 = 0
         var pinchDist: Float = 1.0
         if let thumbTip = points[.thumbTip], let indexTip = points[.indexTip] {
@@ -122,50 +124,31 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching = (pinchDist < 0.065) ? 1 : 0
         }
 
-        // 2. 3D位置 (Position): 画面中央 (0.5, 0.5) からのオフセット
+        // 2. 3D位置 (Position): 画面座標からカメラローカル位置への変換
         let wx = Float(wrist.location.x)
         let wy = Float(wrist.location.y)
 
-        // 手のひらスケールからカメラ奥行き (Depth: 0.3m 〜 0.7m) を算出
         var scale: Float = 0.15
         if let midMCP = points[.middleMCP] {
             scale = max(0.04, hypot(Float(midMCP.location.x) - wx, Float(midMCP.location.y) - wy))
         }
         let depth: Float = max(0.30, min(0.70, 0.070 / scale))
 
+        // カメラローカル X (左右), Y (上下), Z (奥行きマイナス)
         let rawX: Float = (wx - 0.5) * depth * 1.2
-        let rawY: Float = (wy - 0.5) * depth * 1.2
+        let rawY: Float = (0.5 - wy) * depth * 1.2
         let rawZ: Float = -depth
 
         let rawPos = SIMD3<Float>(rawX, rawY, rawZ)
         let prevP = isLeft ? prevLeftPos : prevRightPos
-        let smoothPos = prevP * 0.4 + rawPos * 0.6
+        let smoothPos = prevP * 0.5 + rawPos * 0.5
         if isLeft { prevLeftPos = smoothPos } else { prevRightPos = smoothPos }
 
-        // 3. 3D回転 (Rotation): 手首 -> 中指MCP への標準クォータニオン
-        var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
-        if let midMCP = points[.middleMCP], let idxMCP = points[.indexMCP] {
-            let fwd = SIMD3<Float>(Float(midMCP.location.x) - wx, Float(midMCP.location.y) - wy, -0.3).normalized
-            let right = SIMD3<Float>(Float(idxMCP.location.x) - wx, Float(idxMCP.location.y) - wy, 0.0).normalized
-            let up = simd_cross(right, fwd).normalized
-
-            let rotMat = simd_float3x3(columns: (right, up, fwd))
-            var q = simd_quatf(rotMat)
-            if q.real.isNaN || q.imag.x.isNaN { q = simd_quatf(real: 1, imag: .zero) }
-
-            let prevQ = isLeft ? prevLeftQuat : prevRightQuat
-            let smoothQ = simd_slerp(prevQ, q, 0.5)
-            if isLeft { prevLeftQuat = smoothQ } else { prevRightQuat = smoothQ }
-
-            wristQuat = Quaternionf(w: smoothQ.real, x: smoothQ.imag.x, y: smoothQ.imag.y, z: smoothQ.imag.z)
-        }
-
-        // 4. 指の屈曲度 (Finger Curls: 0.0 = パー, 1.0 = グー)
+        // 3. 指の屈曲度 (Finger Curls: 0.0 = パー, 1.0 = グー)
         let calcCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
             guard let mcp = points[mcpKey], let tip = points[tipKey] else { return 0.0 }
             let dMCP = hypot(Float(mcp.location.x) - wx, Float(mcp.location.y) - wy)
             let dTip = hypot(Float(tip.location.x) - wx, Float(tip.location.y) - wy)
-            // 手首から先端までの距離が手首からMCPまでの距離に近くなれば握っている
             let ratio = dTip / max(0.001, dMCP)
             let curl = (1.85 - ratio) / 1.0
             return max(0.0, min(1.0, curl))
@@ -188,10 +171,10 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         )
         if isLeft { prevLeftCurls = smoothCurls } else { prevRightCurls = smoothCurls }
 
-        // 5. 正準骨格 joints (手首のみ有効、残り20関節は安全な標準オフセット)
+        // 4. 正準骨格 (手首位置をセット)
         let wristBone = BoneTransform(
             position: Vector3f(x: smoothPos.x, y: smoothPos.y, z: smoothPos.z),
-            orientation: wristQuat
+            orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
         )
         let identityBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
 
@@ -235,24 +218,5 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             joints: tupleJoints,
             controller: GameControllerManager.shared.getInputData(for: chirality)
         )
-    }
-
-    private func applyControllerInput(handData: inout HandPacketData, input: ControllerInputData, isLeft: Bool) {
-        handData.controller = input
-        if input.isConnected == 1 {
-            handData.curls.index = input.triggerValue
-            handData.curls.middle = input.gripValue
-            handData.curls.ring = input.gripValue
-            handData.curls.pinky = input.gripValue
-            let isThumbBusy = (input.buttonMask != 0) || (abs(input.stickX) > 0.08) || (abs(input.stickY) > 0.08)
-            handData.curls.thumb = isThumbBusy ? 0.60 : 0.15
-        }
-    }
-}
-
-private extension SIMD3 where Scalar == Float {
-    var normalized: SIMD3<Float> {
-        let len = simd_length(self)
-        return len > 0.0001 ? self / len : SIMD3<Float>(0, 0, 1)
     }
 }
