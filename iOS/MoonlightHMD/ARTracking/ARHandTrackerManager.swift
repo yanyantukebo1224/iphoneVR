@@ -87,21 +87,16 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         var newRight: HandPacketData?
 
         if let observations = results, !observations.isEmpty {
-            if observations.count >= 2 {
-                let sortedObs = observations.sorted { obs1, obs2 in
-                    let x1 = (try? obs1.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
-                    let x2 = (try? obs2.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
-                    return x1 < x2
-                }
-                newLeft = extract21Joints(from: sortedObs[0], chirality: 0)
-                newRight = extract21Joints(from: sortedObs[1], chirality: 1)
-            } else if let singleObs = observations.first {
-                let wristX = (try? singleObs.recognizedPoints(.all)[.wrist]?.location.x) ?? 0.5
-                let chirality: UInt32 = (wristX >= 0.5) ? 1 : 0
-                if chirality == 1 {
-                    newRight = extract21Joints(from: singleObs, chirality: 1)
+            for obs in observations {
+                let isRight = (obs.chirality == .right)
+                if isRight {
+                    if newRight == nil {
+                        newRight = extract21Joints(from: obs, chirality: 1)
+                    }
                 } else {
-                    newLeft = extract21Joints(from: singleObs, chirality: 0)
+                    if newLeft == nil {
+                        newLeft = extract21Joints(from: obs, chirality: 0)
+                    }
                 }
             }
         }
@@ -292,14 +287,14 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
         let dynamicDepth: Float = max(0.25, min(0.85, 0.065 / palmScale))
 
-        // カメラローカル座標系 (X: 右, Y: 上, Z: 前方マイナス)
+        // カメラローカル座標系 (Vision座標系: Y上向きが 1.0)
         let fovFactor: Float = 1.15
-        let localX: Float = (wx - 0.5) * dynamicDepth * fovFactor + (isLeft ? -0.05 : 0.05)
-        let localY: Float = (wy - 0.5) * dynamicDepth * fovFactor - 0.05
+        let localX: Float = (wx - 0.5) * dynamicDepth * fovFactor
+        let localY: Float = (wy - 0.5) * dynamicDepth * fovFactor
         let localZ: Float = -dynamicDepth
 
         let rawLocalPos = SIMD3<Float>(localX, localY, localZ)
-        let posAlpha: Float = 0.65
+        let posAlpha: Float = 0.70
         let prevPos = isLeft ? prevLeftLocalPos : prevRightLocalPos
         let smoothLocalPos = prevPos * (1.0 - posAlpha) + rawLocalPos * posAlpha
         if isLeft { prevLeftLocalPos = smoothLocalPos } else { prevRightLocalPos = smoothLocalPos }
@@ -322,9 +317,8 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             let rX = Float(lit.location.x - idx.location.x)
             let rY = Float(lit.location.y - idx.location.y)
             let rLen = max(0.001, hypot(rX, rY))
-            let vRight = SIMD3<Float>((isLeft ? -rX : rX) / rLen, (isLeft ? -rY : rY) / rLen, 0.20)
+            let vRight = SIMD3<Float>(rX / rLen, rY / rLen, 0.0)
 
-            // 法線ベクトル (外積)
             let vUp = simd_normalize(simd_cross(vRight, vFwd))
             let vFwdOrtho = simd_normalize(simd_cross(vUp, vRight))
             let vRightOrtho = simd_normalize(simd_cross(vFwdOrtho, vUp))
@@ -342,7 +336,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             }
 
             let prevQuat = isLeft ? prevLeftLocalQuat : prevRightLocalQuat
-            let smoothQuat = simd_slerp(prevQuat, currentQuat, 0.50)
+            let smoothQuat = simd_slerp(prevQuat, currentQuat, 0.60)
             if isLeft { prevLeftLocalQuat = smoothQuat } else { prevRightLocalQuat = smoothQuat }
 
             wristQuat = Quaternionf(
