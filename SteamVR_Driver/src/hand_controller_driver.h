@@ -40,23 +40,45 @@ private:
     std::thread m_poseThread;
 
     vr::VRInputComponentHandle_t m_ulSkeletonComponent;
+    
+    // Trigger
     vr::VRInputComponentHandle_t m_ulTriggerClickComponent;
     vr::VRInputComponentHandle_t m_ulTriggerValueComponent;
+    vr::VRInputComponentHandle_t m_ulTriggerTouchComponent;
+
+    // Grip
     vr::VRInputComponentHandle_t m_ulGripClickComponent;
     vr::VRInputComponentHandle_t m_ulGripValueComponent;
+    vr::VRInputComponentHandle_t m_ulGripTouchComponent;
+
+    // Buttons
     vr::VRInputComponentHandle_t m_ulAButtonComponent;
+    vr::VRInputComponentHandle_t m_ulATouchComponent;
     vr::VRInputComponentHandle_t m_ulBButtonComponent;
+    vr::VRInputComponentHandle_t m_ulBTouchComponent;
     vr::VRInputComponentHandle_t m_ulXButtonComponent;
+    vr::VRInputComponentHandle_t m_ulXTouchComponent;
     vr::VRInputComponentHandle_t m_ulYButtonComponent;
+    vr::VRInputComponentHandle_t m_ulYTouchComponent;
+
+    // Thumbstick
     vr::VRInputComponentHandle_t m_ulThumbstickXComponent;
     vr::VRInputComponentHandle_t m_ulThumbstickYComponent;
     vr::VRInputComponentHandle_t m_ulThumbstickClickComponent;
     vr::VRInputComponentHandle_t m_ulThumbstickTouchComponent;
+
+    // Trackpad
     vr::VRInputComponentHandle_t m_ulTrackpadXComponent;
     vr::VRInputComponentHandle_t m_ulTrackpadYComponent;
     vr::VRInputComponentHandle_t m_ulTrackpadTouchComponent;
     vr::VRInputComponentHandle_t m_ulTrackpadClickComponent;
+
+    // System Button
     vr::VRInputComponentHandle_t m_ulSystemButtonComponent;
+    vr::VRInputComponentHandle_t m_ulSystemTouchComponent;
+
+    // Haptics
+    vr::VRInputComponentHandle_t m_ulHapticComponent;
 
     std::chrono::steady_clock::time_point m_lastMovementTime;
 };
