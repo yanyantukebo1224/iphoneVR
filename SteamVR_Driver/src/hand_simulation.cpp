@@ -1,5 +1,3 @@
-//============ Copyright (c) Valve Corporation, All rights reserved. ============
-// Inspired by Moshi Turner's code from Monado
 #include "hand_simulation.h"
 #include "vrmath.h"
 #include <algorithm>
@@ -100,21 +98,7 @@ static void ApplyThumbTransform(const float curl, const float splay, HandSimThum
 	out_thumb.distal.rotation = -DEG_TO_RAD(curl * 45.f);
 }
 
-static inline vr::HmdQuaternion_t QuatMultiply(const vr::HmdQuaternion_t& q1, const vr::HmdQuaternion_t& q2) {
-    return {
-        q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
-        q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
-        q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
-        q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w
-    };
-}
 
-static inline vr::HmdVector3_t QuatRotateVec(const vr::HmdVector3_t& v, const vr::HmdQuaternion_t& q) {
-    vr::HmdQuaternion_t qv = { 0.0, (double)v.v[0], (double)v.v[1], (double)v.v[2] };
-    vr::HmdQuaternion_t qConj = { q.w, -q.x, -q.y, -q.z };
-    vr::HmdQuaternion_t res = QuatMultiply(QuatMultiply(q, qv), qConj);
-    return { (float)res.x, (float)res.y, (float)res.z };
-}
 
 static void ComputeBoneTransform(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const vr::HmdVector3_t& position, vr::VRBoneTransform_t& out_transform)
 {

@@ -3,7 +3,9 @@
 
 #include "openvr_driver.h"
 
+#ifndef DEG_TO_RAD
 #define DEG_TO_RAD(x) ((x) * (3.14159265358979f / 180.f))
+#endif
 
 struct MyFingerCurls
 {

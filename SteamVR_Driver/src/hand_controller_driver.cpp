@@ -1,11 +1,14 @@
 #include "hand_controller_driver.h"
 #include "hand_simulation.h"
+#include "vrmath.h"
 #include <cstring>
 #include <cmath>
 #include <chrono>
 #include <algorithm>
 
+#ifndef DEG_TO_RAD
 #define DEG_TO_RAD(deg) ((deg) * 0.017453292519943295f)
+#endif
 
 enum EOpenVRBone {
     eBone_Root = 0,
@@ -13,27 +16,22 @@ enum EOpenVRBone {
     eBone_Thumb0,
     eBone_Thumb1,
     eBone_Thumb2,
-    eBone_Thumb3,
     eBone_IndexFinger0,
     eBone_IndexFinger1,
     eBone_IndexFinger2,
     eBone_IndexFinger3,
-    eBone_IndexFinger4,
     eBone_MiddleFinger0,
     eBone_MiddleFinger1,
     eBone_MiddleFinger2,
     eBone_MiddleFinger3,
-    eBone_MiddleFinger4,
     eBone_RingFinger0,
     eBone_RingFinger1,
     eBone_RingFinger2,
     eBone_RingFinger3,
-    eBone_RingFinger4,
     eBone_PinkyFinger0,
     eBone_PinkyFinger1,
     eBone_PinkyFinger2,
     eBone_PinkyFinger3,
-    eBone_PinkyFinger4,
     eBone_Aux_Thumb,
     eBone_Aux_IndexFinger,
     eBone_Aux_MiddleFinger,
@@ -42,78 +40,43 @@ enum EOpenVRBone {
     eBone_Count
 };
 
-struct HandSimSplayableJoint {
-    float swing[2] = { 0.f, 0.f };
-    float twist = 0.f;
+static const float c_fingerLengths[5][5] = {
+    { 0.038f, 0.035f, 0.025f, 0.f, 0.f },
+    { 0.045f, 0.040f, 0.025f, 0.02f, 0.f },
+    { 0.048f, 0.042f, 0.027f, 0.02f, 0.f },
+    { 0.045f, 0.040f, 0.025f, 0.02f, 0.f },
+    { 0.035f, 0.030f, 0.020f, 0.018f, 0.f }
 };
 
-struct HandSimJoint {
-    float rotation = 0.f;
+static const float c_metacarpalLength[5] = { 0.03f, 0.065f, 0.063f, 0.058f, 0.052f };
+static const float c_metacarpalOffset[5][3] = {
+    { 0.025f, 0.015f, 0.01f },
+    { 0.03f, 0.08f, 0.015f },
+    { 0.01f, 0.095f, 0.015f },
+    { -0.01f, 0.09f, 0.015f },
+    { -0.025f, 0.08f, 0.015f }
 };
 
-struct HandSimThumb {
-    HandSimSplayableJoint metacarpal;
-    HandSimSplayableJoint proximal;
-    HandSimJoint distal;
-};
-
-struct HandSimFinger {
-    HandSimSplayableJoint metacarpal;
-    HandSimSplayableJoint proximal;
-    HandSimJoint intermediate;
-    HandSimJoint distal;
-};
-
-struct HandSimHand {
-    vr::ETrackedControllerRole role;
-    HandSimThumb thumb;
-    HandSimFinger fingers[4];
-};
-
-static const float finger_joint_lengths[5][5] = {
+static const float c_fingerSplayDefault[5][5] = {
+    { 0.15f, 0.05f, 0.f, 0.f, 0.f },
     { 0.05f, 0.05f, 0.035f, 0.025f, 0.f },
     { 0.03f, 0.073f, 0.045f, 0.025f, 0.02f },
     { 0.01f, 0.091f, 0.049f, 0.03f, 0.02f },
-    { 0.02f, 0.073f, 0.045f, 0.03f, 0.03f },
-    { 0.03f, 0.067f, 0.03f, 0.025f, 0.02f }
+    { 0.02f, 0.073f, 0.045f, 0.03f, 0.03f }
 };
 
-static inline vr::HmdQuaternion_t QuatMultiply(const vr::HmdQuaternion_t& q1, const vr::HmdQuaternion_t& q2) {
-    return {
-        q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
-        q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
-        q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
-        q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w
-    };
-}
+static inline void RotateVectorByQuat(const vr::HmdQuaternion_t& q, const vr::HmdVector3_t& v, float outV[3]) {
+    double qvW = 0.0, qvX = (double)v.v[0], qvY = (double)v.v[1], qvZ = (double)v.v[2];
+    double qCW = q.w, qCX = -q.x, qCY = -q.y, qCZ = -q.z;
 
-static inline vr::HmdVector3_t QuatRotateVec(const vr::HmdVector3_t& v, const vr::HmdQuaternion_t& q) {
-    vr::HmdQuaternion_t qv = { 0.0, (double)v.v[0], (double)v.v[1], (double)v.v[2] };
-    vr::HmdQuaternion_t qConj = { q.w, -q.x, -q.y, -q.z };
-    vr::HmdQuaternion_t res = QuatMultiply(QuatMultiply(q, qv), qConj);
-    vr::HmdVector3_t outV;
-    outV.v[0] = (float)res.x;
-    outV.v[1] = (float)res.y;
-    outV.v[2] = (float)res.z;
-    return outV;
-}
+    double tW = 0.0 - q.x * qvX - q.y * qvY - q.z * qvZ;
+    double tX = q.w * qvX + 0.0 + q.y * qvZ - q.z * qvY;
+    double tY = q.w * qvY - q.x * qvZ + 0.0 + q.z * qvX;
+    double tZ = q.w * qvZ + q.x * qvY - q.y * qvX + 0.0;
 
-static inline vr::HmdQuaternion_t QuatFromEuler(float pitch, float yaw, float roll) {
-    float cp = std::cos(pitch * 0.5f), sp = std::sin(pitch * 0.5f);
-    float cy = std::cos(yaw * 0.5f),   sy = std::sin(yaw * 0.5f);
-    float cr = std::cos(roll * 0.5f),  sr = std::sin(roll * 0.5f);
-    return {
-        (double)(cr * cp * cy + sr * sp * sy),
-        (double)(sr * cp * cy - cr * sp * sy),
-        (double)(cr * sp * cy + sr * cp * sy),
-        (double)(cr * cp * sy - sr * sp * cy)
-    };
-}
-
-static inline vr::HmdQuaternion_t QuatFromSwingTwist(const float swing[2], float twist) {
-    vr::HmdQuaternion_t qSwing = QuatFromEuler(swing[0], swing[1], 0.f);
-    vr::HmdQuaternion_t qTwist = QuatFromEuler(0.f, 0.f, twist);
-    return QuatMultiply(qSwing, qTwist);
+    outV[0] = (float)(tW * qCX + tX * qCW + tY * qCZ - tZ * qCY);
+    outV[1] = (float)(tW * qCY - tX * qCZ + tY * qCW + tZ * qCX);
+    outV[2] = (float)(tW * qCZ + tX * qCY - tY * qCX + tZ * qCW);
 }
 
 static void ComputeBoneTransform(const vr::ETrackedControllerRole role, const vr::HmdQuaternion_t& orientation, const vr::HmdVector3_t& position, vr::VRBoneTransform_t& out_transform) {
@@ -144,17 +107,9 @@ static void ComputeBoneTransformMetacarpal(const vr::ETrackedControllerRole role
     vr::HmdVector3_t bone_position = QuatRotateVec(offset, bone_orientation);
 
     if (role == vr::TrackedControllerRole_RightHand) {
-        std::swap(bone_orientation.w, bone_orientation.x);
-        std::swap(bone_orientation.y, bone_orientation.z);
-        bone_orientation.x *= -1.f;
-        bone_orientation.z *= -1.f;
+        bone_position.v[0] *= -1.f;
     }
-
     ComputeBoneTransform(role, bone_orientation, bone_position, out_transform);
-}
-
-static int CalculateBoneTransformPositionFromFinger(int finger, int bone_in_finger) {
-    return eBone_IndexFinger0 + finger * 5 + bone_in_finger;
 }
 
 void HandControllerDriver::ConvertVision21ToSteamVR31(
@@ -190,48 +145,34 @@ HandControllerDriver::HandControllerDriver(vr::ETrackedControllerRole role)
       m_ulTriggerValueComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulGripClickComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulGripValueComponent(vr::k_ulInvalidInputComponentHandle),
-      m_ulAButtonComponent(vr::k_ulInvalidInputComponentHandle),
-      m_ulBButtonComponent(vr::k_ulInvalidInputComponentHandle),
-      m_ulXButtonComponent(vr::k_ulInvalidInputComponentHandle),
-      m_ulYButtonComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulThumbstickXComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulThumbstickYComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulThumbstickClickComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulThumbstickTouchComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulTrackpadXComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulTrackpadYComponent(vr::k_ulInvalidInputComponentHandle),
-      m_ulTrackpadTouchComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulTrackpadClickComponent(vr::k_ulInvalidInputComponentHandle),
+      m_ulTrackpadTouchComponent(vr::k_ulInvalidInputComponentHandle),
+      m_ulAButtonComponent(vr::k_ulInvalidInputComponentHandle),
+      m_ulBButtonComponent(vr::k_ulInvalidInputComponentHandle),
+      m_ulXButtonComponent(vr::k_ulInvalidInputComponentHandle),
+      m_ulYButtonComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulSystemButtonComponent(vr::k_ulInvalidInputComponentHandle),
-      m_isTracked(false),
-      m_lastSystemClicked(false) {
-    m_lastMovementTime = std::chrono::steady_clock::now();
-    m_lastPosition[0] = 0.0f; m_lastPosition[1] = 0.0f; m_lastPosition[2] = 0.0f;
-    m_smoothedPosition[0] = 0.0f; m_smoothedPosition[1] = 0.0f; m_smoothedPosition[2] = 0.0f;
-    std::memset(&m_pose, 0, sizeof(m_pose));
-    m_pose.poseIsValid = true;
+      m_poseThreadRunning(false)
+{
+    memset(&m_pose, 0, sizeof(m_pose));
+    m_pose.poseIsValid = false;
     m_pose.deviceIsConnected = true;
-    m_pose.result = vr::TrackingResult_Running_OK;
-    
-    m_pose.qRotation.w = 1.0;
+    m_pose.result = vr::TrackingResult_Uninitialized;
+
     m_pose.qWorldFromDriverRotation.w = 1.0;
     m_pose.qDriverFromHeadRotation.w = 1.0;
+
+    m_lastMovementTime = std::chrono::steady_clock::now();
 }
 
 HandControllerDriver::~HandControllerDriver() {
-    m_poseThreadRunning = false;
-    if (m_poseThread.joinable()) {
-        m_poseThread.join();
-    }
-}
-
-void HandControllerDriver::PoseLoop() {
-    while (m_poseThreadRunning) {
-        if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
-            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(11)); // ~90Hz
-    }
+    Deactivate();
 }
 
 vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
@@ -239,27 +180,25 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     m_ulPropertyContainer = vr::VRProperties()->TrackedDeviceToPropertyContainer(m_unObjectId);
 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
-    
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "indexcontroller");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "Knuckles Left" : "Knuckles Right");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, isLeft ? "iPhoneVR_Knuckles_Left" : "iPhoneVR_Knuckles_Right");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "Valve");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, isLeft ? "{indexcontroller}valve_controller_knu_1_0_left" : "{indexcontroller}valve_controller_knu_1_0_right");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ControllerType_String, "knuckles");
-    
-    vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
-    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
-    vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{indexcontroller}/input/index_controller_profile.json");
+    const char* renderModel = isLeft ? "valve/valve_controller_knu_ev3_0_left" : "valve/valve_controller_knu_ev3_0_right";
+    const char* serialNumber = isLeft ? "iPhoneVR_Hand_Left_001" : "iPhoneVR_Hand_Right_001";
 
-    const char* skelComponentPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
-    const char* skelTypePath = isLeft ? "/skeleton/hand/left" : "/skeleton/hand/right";
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, "Knuckles EV3");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, renderModel);
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, serialNumber);
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "Valve");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_TrackingSystemName_String, "lighthouse");
+    vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_DeviceClass_Int32, vr::TrackedDeviceClass_Controller);
+    vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, isLeft ? vr::TrackedControllerRole_LeftHand : vr::TrackedControllerRole_RightHand);
+    vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerHandSelectionPriority_Int32, 20000);
+
+    const char* skeletonPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
     vr::VRDriverInput()->CreateSkeletonComponent(
         m_ulPropertyContainer,
-        skelComponentPath,
-        skelTypePath,
-        skelTypePath,
-        vr::VRSkeletalTracking_Full,
+        skeletonPath,
+        skeletonPath,
+        "/pose/raw",
+        vr::VRSkeletalTracking_Partial,
         nullptr,
         0,
         &m_ulSkeletonComponent
@@ -271,11 +210,11 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/grip/value", &m_ulGripValueComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedOneSided);
 
     if (isLeft) {
-        vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/x/click", &m_ulXButtonComponent);
-        vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/y/click", &m_ulYButtonComponent);
+        vr::VRDriverInput()->CreateBooleanComponent(m_ulXButtonComponent, "/input/x/click", &m_ulXButtonComponent);
+        vr::VRDriverInput()->CreateBooleanComponent(m_ulYButtonComponent, "/input/y/click", &m_ulYButtonComponent);
     } else {
-        vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/a/click", &m_ulAButtonComponent);
-        vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/b/click", &m_ulBButtonComponent);
+        vr::VRDriverInput()->CreateBooleanComponent(m_ulAButtonComponent, "/input/a/click", &m_ulAButtonComponent);
+        vr::VRDriverInput()->CreateBooleanComponent(m_ulBButtonComponent, "/input/b/click", &m_ulBButtonComponent);
     }
 
     vr::VRDriverInput()->CreateScalarComponent(m_ulPropertyContainer, "/input/thumbstick/x", &m_ulThumbstickXComponent, vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedTwoSided);
@@ -290,16 +229,30 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
 
     vr::VRDriverInput()->CreateBooleanComponent(m_ulPropertyContainer, "/input/system/click", &m_ulSystemButtonComponent);
 
-    HandPacketData dummyHand{};
-    dummyHand.isTracked = 1;
-    dummyHand.joints[VISION_JOINT_WRIST].position = Vector3f{0.0f, 0.0f, 0.0f};
-
-    UpdateHandPose(dummyHand, Vector3f{0.0f, 1.65f, 0.0f}, Quaternionf{1.0f, 0.0f, 0.0f, 0.0f});
-
     m_poseThreadRunning = true;
     m_poseThread = std::thread(&HandControllerDriver::PoseLoop, this);
 
     return vr::VRInitError_None;
+}
+
+void HandControllerDriver::Deactivate() {
+    m_poseThreadRunning = false;
+    if (m_poseThread.joinable()) {
+        m_poseThread.join();
+    }
+    m_unObjectId = vr::k_unTrackedDeviceIndexInvalid;
+}
+
+void HandControllerDriver::EnterStandby() {}
+
+void* HandControllerDriver::GetComponent(const char* pchComponentNameAndVersion) {
+    return nullptr;
+}
+
+void HandControllerDriver::DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) {
+    if (unResponseBufferSize > 0) {
+        pchResponseBuffer[0] = 0;
+    }
 }
 
 void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos, const Quaternionf& headRot) {
@@ -312,35 +265,31 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     bool isLeft = (m_role == vr::TrackedControllerRole_LeftHand);
     float effectiveHeadY = (headPos.y < 0.5f) ? 1.65f : headPos.y;
 
-    vr::HmdQuaternion_t qHead = { (double)headRot.w, (double)headRot.x, (double)headRot.y, (double)headRot.z };
+    vr::HmdQuaternion_t qHead;
+    qHead.w = (double)headRot.w;
+    qHead.x = (double)headRot.x;
+    qHead.y = (double)headRot.y;
+    qHead.z = (double)headRot.z;
     if (qHead.w == 0.0 && qHead.x == 0.0 && qHead.y == 0.0 && qHead.z == 0.0) {
-        qHead = { 1.0, 0.0, 0.0, 0.0 };
+        qHead.w = 1.0;
     }
 
-    vr::HmdVector3_t localOffset;
     auto now = std::chrono::steady_clock::now();
+
+    // GlassVR standard controller position offset relative to head
+    m_pose.vecPosition[0] = headPos.x + (isLeft ? -0.18f : 0.18f);
+    m_pose.vecPosition[1] = effectiveHeadY - 0.18f;
+    m_pose.vecPosition[2] = headPos.z - 0.32f;
 
     if (handData.isTracked == 1) {
         m_lastMovementTime = now;
-        localOffset.v[0] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.x, -0.60f, 0.60f);
-        localOffset.v[1] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.y, -0.60f, 0.40f);
-        localOffset.v[2] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.z, -0.75f, -0.15f);
-    } else {
-        // Natural ergonomic controller position in front of chest
-        localOffset.v[0] = isLeft ? -0.18f : 0.18f;
-        localOffset.v[1] = -0.18f;
-        localOffset.v[2] = -0.32f;
+        m_pose.vecPosition[0] = headPos.x + std::clamp(handData.joints[VISION_JOINT_WRIST].position.x, -0.60f, 0.60f);
+        m_pose.vecPosition[1] = effectiveHeadY + std::clamp(handData.joints[VISION_JOINT_WRIST].position.y, -0.60f, 0.40f);
+        m_pose.vecPosition[2] = headPos.z + std::clamp(handData.joints[VISION_JOINT_WRIST].position.z, -0.75f, -0.15f);
     }
 
-    // Transform camera-local position to world space using HMD head rotation
-    vr::HmdVector3_t worldOffset = QuatRotateVec(localOffset, qHead);
-    m_pose.vecPosition[0] = headPos.x + worldOffset.v[0];
-    m_pose.vecPosition[1] = effectiveHeadY + worldOffset.v[1];
-    m_pose.vecPosition[2] = headPos.z + worldOffset.v[2];
-
-    // Ergonomic forward-pointing grip rotation offset (Pitch forward ~45 deg, inward cant)
-    // Points the controllers and avatar hands naturally forward in player's field of view
-    double pitchAngle = -0.75; // ~-43 degrees forward tilt
+    // GlassVR forward grip orientation (~43 deg Pitch)
+    double pitchAngle = -0.75;
     double yawAngle = isLeft ? 0.08 : -0.08;
     double rollAngle = isLeft ? 0.10 : -0.10;
 
@@ -357,147 +306,64 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     qGripOffset.y = cr * sp * cy + sr * cp * sy;
     qGripOffset.z = cr * cp * sy - sr * sp * cy;
 
-    // Base hand orientation follows HMD direction with ergonomic forward-pointing grip offset
-    vr::HmdQuaternion_t qBaseHand = QuatMultiply(qHead, qGripOffset);
-    m_pose.qRotation = qBaseHand;
+    qGripOffset = QuatMultiply(qHead, qGripOffset);
+    m_pose.qRotation = qGripOffset;
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
-        // Button and input mapping
-        bool btnPrimary = false;   // Left: X, Right: A
-        bool btnSecondary = false; // Left: Y, Right: B
-        bool isTriggerClicked = false;
+        bool btnPrimary = false;
+        bool btnSecondary = false;
+        bool btnStickClick = false;
         float trigVal = 0.0f;
-        bool isGripClicked = false;
         float gripVal = 0.0f;
-        bool stickClicked = false;
-        bool systemClicked = false;
         float stickX = 0.0f;
         float stickY = 0.0f;
 
         if (handData.controller.isConnected == 1) {
-            // Joy-Con / Gamepad physical input priority
-            uint32_t mask = handData.controller.buttonMask;
-
-            if (isLeft) {
-                // Left hand: X button and Y button (or D-pad)
-                btnPrimary = (mask & BTN_A_OR_X) || (mask & BTN_DPAD_DOWN) || (mask & BTN_DPAD_LEFT);
-                btnSecondary = (mask & BTN_B_OR_Y) || (mask & BTN_DPAD_UP) || (mask & BTN_DPAD_RIGHT);
-            } else {
-                // Right hand: A button and B button
-                btnPrimary = (mask & BTN_A_OR_X) || (mask & BTN_DPAD_DOWN) || (mask & BTN_DPAD_RIGHT);
-                btnSecondary = (mask & BTN_B_OR_Y) || (mask & BTN_DPAD_UP) || (mask & BTN_DPAD_LEFT);
-            }
-
             trigVal = handData.controller.triggerValue;
-            isTriggerClicked = (mask & BTN_TRIGGER_CLICK) != 0 || (trigVal > 0.45f);
-
             gripVal = handData.controller.gripValue;
-            isGripClicked = (mask & BTN_GRIP_CLICK) != 0 || (gripVal > 0.45f);
-
-            stickClicked = (mask & BTN_THUMBSTICK_CLICK) != 0;
-            // Plus (+) or Minus (-) triggers SteamVR System (Home) dashboard
-            systemClicked = (mask & BTN_SYSTEM) != 0;
-
-            // スクリーンショット誤爆防止 (SteamVR の System + Trigger 同時押しコンボを回避)
-            if (systemClicked) {
-                isTriggerClicked = false;
-                trigVal = 0.0f;
-            }
-
             stickX = handData.controller.stickX;
             stickY = handData.controller.stickY;
-        } else {
-            // Standalone hand tracking gestures
-            if (handData.isPinching == 1) {
-                isTriggerClicked = true;
-                trigVal = 1.0f;
-            } else if (handData.pinchDistance < 0.08f) {
-                trigVal = std::clamp((0.08f - handData.pinchDistance) / 0.04f, 0.0f, 1.0f);
-                isTriggerClicked = (trigVal > 0.6f);
-            }
 
-            // Fist grab (Middle, Ring, Pinky curls)
-            float fistCurl = (handData.curls.middle + handData.curls.ring + handData.curls.pinky) / 3.0f;
-            if (fistCurl > 0.65f) {
-                gripVal = std::clamp((fistCurl - 0.65f) / 0.25f, 0.0f, 1.0f);
-                isGripClicked = (gripVal > 0.50f);
-            }
-        }
-
-        if (m_ulTriggerClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, isTriggerClicked, 0);
-        }
-        if (m_ulTriggerValueComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateScalarComponent(m_ulTriggerValueComponent, trigVal, 0);
-        }
-
-        if (m_ulGripClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, isGripClicked, 0);
-        }
-        if (m_ulGripValueComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateScalarComponent(m_ulGripValueComponent, gripVal, 0);
+            btnPrimary = (handData.controller.buttonMask & (1 << 0)) != 0;
+            btnSecondary = (handData.controller.buttonMask & (1 << 1)) != 0;
+            btnStickClick = (handData.controller.buttonMask & (1 << 2)) != 0;
+        } else if (handData.isPinching == 1) {
+            trigVal = 1.0f;
         }
 
         if (isLeft) {
-            if (m_ulXButtonComponent != vr::k_ulInvalidInputComponentHandle) {
-                vr::VRDriverInput()->UpdateBooleanComponent(m_ulXButtonComponent, btnPrimary, 0);
-            }
-            if (m_ulYButtonComponent != vr::k_ulInvalidInputComponentHandle) {
-                vr::VRDriverInput()->UpdateBooleanComponent(m_ulYButtonComponent, btnSecondary, 0);
-            }
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulXButtonComponent, btnPrimary, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulYButtonComponent, btnSecondary, 0);
         } else {
-            if (m_ulAButtonComponent != vr::k_ulInvalidInputComponentHandle) {
-                vr::VRDriverInput()->UpdateBooleanComponent(m_ulAButtonComponent, btnPrimary, 0);
-            }
-            if (m_ulBButtonComponent != vr::k_ulInvalidInputComponentHandle) {
-                vr::VRDriverInput()->UpdateBooleanComponent(m_ulBButtonComponent, btnSecondary, 0);
-            }
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulAButtonComponent, btnPrimary, 0);
+            vr::VRDriverInput()->UpdateBooleanComponent(m_ulBButtonComponent, btnSecondary, 0);
         }
 
-        if (m_ulThumbstickXComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickXComponent, stickX, 0);
-        }
-        if (m_ulThumbstickYComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickYComponent, stickY, 0);
-        }
-        if (m_ulThumbstickClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickClickComponent, stickClicked, 0);
-        }
+        vr::VRDriverInput()->UpdateScalarComponent(m_ulTriggerValueComponent, trigVal, 0);
+        vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, trigVal > 0.75f, 0);
 
-        bool isStickTouched = (std::abs(stickX) > 0.05f || std::abs(stickY) > 0.05f || stickClicked);
-        if (m_ulThumbstickTouchComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickTouchComponent, isStickTouched, 0);
-        }
+        vr::VRDriverInput()->UpdateScalarComponent(m_ulGripValueComponent, gripVal, 0);
+        vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, gripVal > 0.75f, 0);
 
-        // Trackpad にも同時にミラーリング (Trackpad 移動型ゲーム対応)
-        if (m_ulTrackpadXComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateScalarComponent(m_ulTrackpadXComponent, stickX, 0);
-        }
-        if (m_ulTrackpadYComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateScalarComponent(m_ulTrackpadYComponent, stickY, 0);
-        }
-        if (m_ulTrackpadTouchComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTrackpadTouchComponent, isStickTouched, 0);
-        }
-        if (m_ulTrackpadClickComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateBooleanComponent(m_ulTrackpadClickComponent, stickClicked, 0);
-        }
-
-        if (m_ulSystemButtonComponent != vr::k_ulInvalidInputComponentHandle) {
-            if (systemClicked != m_lastSystemClicked) {
-                m_lastSystemClicked = systemClicked;
-                vr::VRDriverInput()->UpdateBooleanComponent(m_ulSystemButtonComponent, systemClicked, 0);
-            }
-        }
+        vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickXComponent, stickX, 0);
+        vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickYComponent, stickY, 0);
+        vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickClickComponent, btnStickClick, 0);
+        vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickTouchComponent, (std::abs(stickX) > 0.05f || std::abs(stickY) > 0.05f), 0);
 
         vr::VRBoneTransform_t bones[31];
         ConvertVision21ToSteamVR31(handData, bones, m_role);
-        if (m_ulSkeletonComponent != vr::k_ulInvalidInputComponentHandle) {
-            vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithController, bones, 31);
-            vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithoutController, bones, 31);
-        }
+        vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithController, bones, 31);
+        vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithoutController, bones, 31);
     }
 }
 
+void HandControllerDriver::PoseLoop() {
+    while (m_poseThreadRunning) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(11));
+        if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid && m_pose.poseIsValid) {
+            vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
+        }
+    }
+}

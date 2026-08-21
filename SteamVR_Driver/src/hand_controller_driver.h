@@ -14,10 +14,10 @@ public:
     virtual ~HandControllerDriver();
 
     virtual vr::EVRInitError Activate(uint32_t unObjectId) override;
-    virtual void Deactivate() override {}
-    virtual void EnterStandby() override {}
-    virtual void* GetComponent(const char* pchComponentNameAndVersion) override { return nullptr; }
-    virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override {}
+    virtual void Deactivate() override;
+    virtual void EnterStandby() override;
+    virtual void* GetComponent(const char* pchComponentNameAndVersion) override;
+    virtual void DebugRequest(const char* pchRequest, char* pchResponseBuffer, uint32_t unResponseBufferSize) override;
     virtual vr::DriverPose_t GetPose() override { return m_pose; }
 
     void UpdateHandPose(const HandPacketData& handData, const Vector3f& headPos, const Quaternionf& headRot);
@@ -58,12 +58,7 @@ private:
     vr::VRInputComponentHandle_t m_ulTrackpadClickComponent;
     vr::VRInputComponentHandle_t m_ulSystemButtonComponent;
 
-    bool m_isTracked;
-    bool m_lastSystemClicked = false;
-
     std::chrono::steady_clock::time_point m_lastMovementTime;
-    float m_lastPosition[3];
-    float m_smoothedPosition[3];
 };
 
-#endif // HAND_CONTROLLER_DRIVER_H
+#endif
