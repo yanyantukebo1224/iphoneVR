@@ -22,7 +22,7 @@ jobs:
 
       - name: Build MoonlightHMD Simulator / Device (.app / .ipa)
         run: |
-          cd iOS/MoonlightHMD
+          cd iOS
           xcodebuild clean build \
             -project MoonlightHMD.xcodeproj \
             -scheme MoonlightHMD \
@@ -31,7 +31,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            BUILD_DIR=../../build_output
+            BUILD_DIR=../build_output
 
       - name: Package .app into Zip
         run: |
