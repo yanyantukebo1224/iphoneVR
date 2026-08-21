@@ -55,10 +55,9 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
 
         let pixelBuffer = frame.capturedImage
-        let visionOrientation = currentCGImagePropertyOrientation()
 
         processingQueue.async {
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: visionOrientation, options: [:])
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
             do {
                 try handler.perform([self.handPoseRequest])
                 self.processHandObservation(results: self.handPoseRequest.results, frame: frame)
@@ -108,39 +107,33 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let isExpFinger = VRSettingsManager.shared.isFingerTrackingExperimentalEnabled
 
         // 左手データ統合
-        if newLeft == nil {
+        if newLeft == nil && leftInput.isConnected == 1 {
             var leftDummy = createDefaultHandData(chirality: 0)
             leftDummy.controller = leftInput
             leftDummy.isTracked = 1
-            if leftInput.isConnected == 1 {
-                leftDummy.curls = generateControllerCurls(input: leftInput, isLeft: true)
-                leftDummy.splays = generateControllerSplays(input: leftInput, isLeft: true)
-            }
+            leftDummy.curls = generateControllerCurls(input: leftInput, isLeft: true)
+            leftDummy.splays = generateControllerSplays(input: leftInput, isLeft: true)
             newLeft = leftDummy
-        } else {
-            newLeft?.controller = leftInput
         }
 
         // 右手データ統合
-        if newRight == nil {
+        if newRight == nil && rightInput.isConnected == 1 {
             var rightDummy = createDefaultHandData(chirality: 1)
             rightDummy.controller = rightInput
             rightDummy.isTracked = 1
-            if rightInput.isConnected == 1 {
-                rightDummy.curls = generateControllerCurls(input: rightInput, isLeft: false)
-                rightDummy.splays = generateControllerSplays(input: rightInput, isLeft: false)
-            }
+            rightDummy.curls = generateControllerCurls(input: rightInput, isLeft: false)
+            rightDummy.splays = generateControllerSplays(input: rightInput, isLeft: false)
             newRight = rightDummy
-        } else {
-            newRight?.controller = rightInput
         }
 
         if var left = newLeft {
+            left.controller = leftInput
             applySmartControllerOverride(handData: &left, input: leftInput, isLeft: true, isExpFinger: isExpFinger)
             newLeft = left
         }
 
         if var right = newRight {
+            right.controller = rightInput
             applySmartControllerOverride(handData: &right, input: rightInput, isLeft: false, isExpFinger: isExpFinger)
             newRight = right
         }
