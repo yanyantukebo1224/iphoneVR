@@ -12,6 +12,10 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
 
     private var currentTexture: MTLTexture?
 
+    override var prefersStatusBarHidden: Bool { return true }
+    override var prefersHomeIndicatorAutoHidden: Bool { return true }
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { return .all }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupMetal()
@@ -20,7 +24,7 @@ class MoonlightVRViewController: UIViewController, MTKViewDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        mtkView?.frame = view.bounds
+        mtkView?.frame = UIScreen.main.bounds
     }
 
     private func setupMetal() {

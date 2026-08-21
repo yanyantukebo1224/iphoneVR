@@ -1,4 +1,5 @@
 #include "hand_controller_driver.h"
+#include "hand_simulation.h"
 #include <cstring>
 #include <cmath>
 #include <chrono>
@@ -161,40 +162,12 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     vr::VRBoneTransform_t outBones[31],
     vr::ETrackedControllerRole role
 ) {
-    HandSimHand hand{};
-    hand.role = role;
-
-    outBones[eBone_Root] = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.0f } };
-    outBones[eBone_Wrist] = { { -0.034038f, 0.036503f, 0.164722f, 1.0f }, { -0.055147f, -0.078608f, -0.920279f, 0.379296f } };
-
-    if (role == vr::TrackedControllerRole_RightHand) {
-        outBones[eBone_Wrist].position.v[0] *= -1.f;
-        outBones[eBone_Wrist].orientation.y *= -1.f;
-        outBones[eBone_Wrist].orientation.z *= -1.f;
-    }
-
-    for (auto& finger : hand.fingers) {
-        finger.proximal.swing[1] = DEG_TO_RAD(10.f);
-        finger.intermediate.rotation = DEG_TO_RAD(5.f);
-        finger.distal.rotation = DEG_TO_RAD(5.f);
-    }
-
-    hand.thumb.metacarpal.swing[0] = DEG_TO_RAD(5.f);
-    hand.thumb.metacarpal.swing[1] = DEG_TO_RAD(18.f);
-    hand.thumb.metacarpal.twist = DEG_TO_RAD(35.f);
-
-    hand.fingers[0].metacarpal.swing[1] = DEG_TO_RAD(10.f);
-    hand.fingers[1].metacarpal.swing[1] = DEG_TO_RAD(0.f);
-    hand.fingers[2].metacarpal.swing[1] = DEG_TO_RAD(-10.f);
-    hand.fingers[3].metacarpal.swing[1] = DEG_TO_RAD(-20.f);
-
     float curlThumb  = std::clamp(handData.curls.thumb, 0.0f, 1.0f);
     float curlIndex  = std::clamp(handData.curls.index, 0.0f, 1.0f);
     float curlMiddle = std::clamp(handData.curls.middle, 0.0f, 1.0f);
     float curlRing   = std::clamp(handData.curls.ring, 0.0f, 1.0f);
     float curlPinky  = std::clamp(handData.curls.pinky, 0.0f, 1.0f);
 
-    // Joy-Conコントローラー接続時の自然なエルゴノミクス把持ポーズ
     if (handData.controller.isConnected == 1) {
         float trigVal = handData.controller.triggerValue;
         float gripVal = handData.controller.gripValue;
@@ -207,60 +180,22 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
         curlThumb = isStickTouched ? 0.35f : 0.15f;
     }
 
-    float splayThumb  = handData.splays.thumb;
-    float splayIndex  = handData.splays.index;
-    float splayMiddle = handData.splays.middle;
-    float splayRing   = handData.splays.ring;
-    float splayPinky  = handData.splays.pinky;
+    MyFingerCurls curls = { curlThumb, curlIndex, curlMiddle, curlRing, curlPinky };
+    MyFingerSplays splays = {
+        handData.splays.thumb,
+        handData.splays.index,
+        handData.splays.middle,
+        handData.splays.ring,
+        handData.splays.pinky
+    };
 
-    // VMT Scalar Linear Space: 0.0 (Open Hand/パー) -> 1.0 (Fist/グー)
-    hand.thumb.metacarpal.swing[0] -= DEG_TO_RAD(curlThumb * 10.f);
-    hand.thumb.metacarpal.swing[1] += DEG_TO_RAD(splayThumb * 15.f);
-    hand.thumb.proximal.swing[0] = -DEG_TO_RAD(curlThumb * 45.f);
-    hand.thumb.proximal.swing[1] = DEG_TO_RAD((1.0f - curlThumb) * 15.f + curlThumb * 5.f + splayThumb * 15.f);
-    hand.thumb.distal.rotation = -DEG_TO_RAD(curlThumb * 45.f);
-
-    float curls[4] = { curlIndex, curlMiddle, curlRing, curlPinky };
-    float splays[4] = { splayIndex, splayMiddle, splayRing, splayPinky };
-
-    for (int i = 0; i < 4; ++i) {
-        hand.fingers[i].metacarpal.swing[0] -= DEG_TO_RAD(curls[i] * 5.f);
-        hand.fingers[i].proximal.swing[0] = -DEG_TO_RAD(curls[i] * 75.f);
-        hand.fingers[i].proximal.swing[1] += DEG_TO_RAD(splays[i] * 25.f);
-        hand.fingers[i].intermediate.rotation = -DEG_TO_RAD(curls[i] * 75.f);
-        hand.fingers[i].distal.rotation = -DEG_TO_RAD(curls[i] * 65.f);
-    }
-
-    ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.thumb.metacarpal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][0], outBones[eBone_Thumb0]);
-    ComputeBoneTransform(role, QuatFromSwingTwist(hand.thumb.proximal.swing, hand.thumb.metacarpal.twist), finger_joint_lengths[0][1], outBones[eBone_Thumb1]);
-    ComputeBoneTransform(role, QuatFromEuler(hand.thumb.distal.rotation, 0.f, 0.f), finger_joint_lengths[0][2], outBones[eBone_Thumb2]);
-    ComputeBoneTransform(role, { 1.f, 0.f, 0.f, 0.f }, finger_joint_lengths[0][3], outBones[eBone_Thumb3]);
-
-    for (int finger = 0; finger < 4; finger++) {
-        ComputeBoneTransformMetacarpal(role, QuatFromSwingTwist(hand.fingers[finger].metacarpal.swing, hand.fingers[finger].metacarpal.twist),
-            finger_joint_lengths[finger + 1][0], outBones[CalculateBoneTransformPositionFromFinger(finger, 0)]);
-
-        ComputeBoneTransform(role, QuatFromSwingTwist(hand.fingers[finger].proximal.swing, hand.fingers[finger].proximal.twist), finger_joint_lengths[finger + 1][1],
-            outBones[CalculateBoneTransformPositionFromFinger(finger, 1)]);
-
-        ComputeBoneTransform(role, QuatFromEuler(hand.fingers[finger].intermediate.rotation, 0.f, 0.f), finger_joint_lengths[finger + 1][2],
-            outBones[CalculateBoneTransformPositionFromFinger(finger, 2)]);
-
-        ComputeBoneTransform(role, QuatFromEuler(hand.fingers[finger].distal.rotation, 0.f, 0.f), finger_joint_lengths[finger + 1][3],
-            outBones[CalculateBoneTransformPositionFromFinger(finger, 3)]);
-
-        ComputeBoneTransform(role, { 1.f, 0.f, 0.f, 0.f }, finger_joint_lengths[finger + 1][4], outBones[CalculateBoneTransformPositionFromFinger(finger, 4)]);
-    }
-
-    outBones[eBone_Aux_Thumb] = outBones[eBone_Thumb3];
-    outBones[eBone_Aux_IndexFinger] = outBones[eBone_IndexFinger4];
-    outBones[eBone_Aux_MiddleFinger] = outBones[eBone_MiddleFinger4];
-    outBones[eBone_Aux_RingFinger] = outBones[eBone_RingFinger4];
-    outBones[eBone_Aux_PinkyFinger] = outBones[eBone_PinkyFinger4];
+    static MyHandSimulation sim;
+    sim.ComputeSkeletonTransforms(role, curls, splays, outBones);
 }
 
 HandControllerDriver::HandControllerDriver(vr::ETrackedControllerRole role)
-    : m_role(role), m_unObjectId(vr::k_unTrackedDeviceIndexInvalid),
+    : m_role(role),
+      m_unObjectId(vr::k_unTrackedDeviceIndexInvalid),
       m_ulPropertyContainer(vr::k_ulInvalidPropertyContainer),
       m_ulSkeletonComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulTriggerClickComponent(vr::k_ulInvalidInputComponentHandle),
@@ -281,9 +216,10 @@ HandControllerDriver::HandControllerDriver(vr::ETrackedControllerRole role)
       m_ulTrackpadClickComponent(vr::k_ulInvalidInputComponentHandle),
       m_ulSystemButtonComponent(vr::k_ulInvalidInputComponentHandle),
       m_isTracked(false),
-      m_lastMovementTime(std::chrono::steady_clock::now()),
-      m_lastPosition{0.0f, 0.0f, 0.0f},
-      m_smoothedPosition{0.0f, 0.0f, 0.0f} {
+      m_lastSystemClicked(false) {
+    m_lastMovementTime = std::chrono::steady_clock::now();
+    m_lastPosition[0] = 0.0f; m_lastPosition[1] = 0.0f; m_lastPosition[2] = 0.0f;
+    m_smoothedPosition[0] = 0.0f; m_smoothedPosition[1] = 0.0f; m_smoothedPosition[2] = 0.0f;
     std::memset(&m_pose, 0, sizeof(m_pose));
     m_pose.poseIsValid = true;
     m_pose.deviceIsConnected = true;
@@ -320,13 +256,13 @@ vr::EVRInitError HandControllerDriver::Activate(uint32_t unObjectId) {
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ModelNumber_String, isLeft ? "Knuckles Left" : "Knuckles Right");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_SerialNumber_String, isLeft ? "iPhoneVR_Knuckles_Left" : "iPhoneVR_Knuckles_Right");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ManufacturerName_String, "Valve");
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, isLeft ? "{indexcontroller}valve_controller_knuckles_left" : "{indexcontroller}valve_controller_knuckles_right");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_RenderModelName_String, isLeft ? "{indexcontroller}valve_controller_knu_1_0_left" : "{indexcontroller}valve_controller_knu_1_0_right");
     vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_ControllerType_String, "knuckles");
     
     vr::VRProperties()->SetInt32Property(m_ulPropertyContainer, vr::Prop_ControllerRoleHint_Int32, m_role);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_WillDriftInYaw_Bool, false);
     vr::VRProperties()->SetBoolProperty(m_ulPropertyContainer, vr::Prop_DeviceIsWireless_Bool, true);
-    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{iphonevr}/input/iphonevr_controller_profile.json");
+    vr::VRProperties()->SetStringProperty(m_ulPropertyContainer, vr::Prop_InputProfilePath_String, "{indexcontroller}/input/index_controller_profile.json");
 
     const char* skelComponentPath = isLeft ? "/input/skeleton/left" : "/input/skeleton/right";
     const char* skelTypePath = isLeft ? "/skeleton/hand/left" : "/skeleton/hand/right";

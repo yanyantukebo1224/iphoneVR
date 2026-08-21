@@ -116,7 +116,7 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         if newLeft == nil {
             var leftDummy = createDefaultHandData(chirality: 0)
             leftDummy.controller = leftInput
-            leftDummy.isTracked = (leftInput.isConnected == 1) ? 1 : 0
+            leftDummy.isTracked = 1
             if leftInput.isConnected == 1 {
                 leftDummy.curls = generateControllerCurls(input: leftInput, isLeft: true)
                 leftDummy.splays = generateControllerSplays(input: leftInput, isLeft: true)
@@ -124,14 +124,13 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             newLeft = leftDummy
         } else {
             newLeft?.controller = leftInput
-            applySmartControllerOverride(handData: &newLeft!, input: leftInput, isLeft: true, isExpFinger: isExpFinger)
         }
 
         // 右手データ統合
         if newRight == nil {
             var rightDummy = createDefaultHandData(chirality: 1)
             rightDummy.controller = rightInput
-            rightDummy.isTracked = (rightInput.isConnected == 1) ? 1 : 0
+            rightDummy.isTracked = 1
             if rightInput.isConnected == 1 {
                 rightDummy.curls = generateControllerCurls(input: rightInput, isLeft: false)
                 rightDummy.splays = generateControllerSplays(input: rightInput, isLeft: false)
@@ -139,7 +138,16 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             newRight = rightDummy
         } else {
             newRight?.controller = rightInput
-            applySmartControllerOverride(handData: &newRight!, input: rightInput, isLeft: false, isExpFinger: isExpFinger)
+        }
+
+        if var left = newLeft {
+            applySmartControllerOverride(handData: &left, input: leftInput, isLeft: true, isExpFinger: isExpFinger)
+            newLeft = left
+        }
+
+        if var right = newRight {
+            applySmartControllerOverride(handData: &right, input: rightInput, isLeft: false, isExpFinger: isExpFinger)
+            newRight = right
         }
 
         DispatchQueue.main.async {

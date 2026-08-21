@@ -1,4 +1,4 @@
-name: Build iOS App
+name: Build MoonlightHMD iOS App
 
 on:
   push:
@@ -8,22 +8,42 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: macos-14
+  build-ios:
+    runs-on: macos-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
         with:
-          submodules: recursive
+          xcode-version: 'latest-stable'
 
-      - name: Make build script executable and build
+      - name: Build MoonlightHMD Simulator / Device (.app / .ipa)
         run: |
-          chmod +x iOS/build_ios.sh
-          cd iOS
-          ./build_ios.sh
+          cd iOS/MoonlightHMD
+          xcodebuild clean build \
+            -project MoonlightHMD.xcodeproj \
+            -scheme MoonlightHMD \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            BUILD_DIR=../../build_output
 
-      - name: Upload IPA Artifact
+      - name: Package .app into Zip
+        run: |
+          mkdir -p Payload
+          cp -r build_output/Release-iphoneos/MoonlightHMD.app Payload/
+          zip -r MoonlightHMD.ipa Payload
+          zip -r MoonlightHMD_app.zip build_output/Release-iphoneos/MoonlightHMD.app
+
+      - name: Upload iOS App Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MoonlightHMD-iOS-IPA
-          path: iOS/build/MoonlightHMD.ipa
+          name: MoonlightHMD-iOS-App
+          path: |
+            MoonlightHMD.ipa
+            MoonlightHMD_app.zip

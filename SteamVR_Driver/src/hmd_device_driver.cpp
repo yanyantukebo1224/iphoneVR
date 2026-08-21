@@ -104,31 +104,31 @@ bool HMDDeviceDriver::GetTimeSinceLastVsync(float *pfSecondsSinceLastVsync, uint
 void HMDDeviceDriver::GetWindowBounds(int32_t* pnX, int32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
     *pnX = 0;
     *pnY = 0;
-    *pnWidth = 2880;
-    *pnHeight = 1600;
+    *pnWidth = 1920;
+    *pnHeight = 1080;
 }
 
 void HMDDeviceDriver::GetRecommendedRenderTargetSize(uint32_t* pnWidth, uint32_t* pnHeight) {
-    *pnWidth = 1440;
-    *pnHeight = 1600;
+    *pnWidth = 960;
+    *pnHeight = 1080;
 }
 
 void HMDDeviceDriver::GetEyeOutputViewport(vr::EVREye eEye, uint32_t* pnX, uint32_t* pnY, uint32_t* pnWidth, uint32_t* pnHeight) {
     *pnY = 0;
-    *pnWidth = 1440;
-    *pnHeight = 1600;
+    *pnWidth = 960;
+    *pnHeight = 1080;
     if (eEye == vr::Eye_Left) {
         *pnX = 0;
     } else {
-        *pnX = 1440;
+        *pnX = 960;
     }
 }
 
 void HMDDeviceDriver::GetProjectionRaw(vr::EVREye eEye, float* pfLeft, float* pfRight, float* pfTop, float* pfBottom) {
-    *pfLeft = -1.15f;
-    *pfRight = 1.15f;
-    *pfTop = -1.15f;
-    *pfBottom = 1.15f;
+    *pfLeft = -1.0f;
+    *pfRight = 1.0f;
+    *pfTop = -1.0f;
+    *pfBottom = 1.0f;
 }
 
 void HMDDeviceDriver::UpdateHeadPose(const Vector3f& headPos, const Quaternionf& headRot) {

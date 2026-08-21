@@ -18,3 +18,5 @@
 *.exe
 *.o
 *.obj
+/GlassVr/HmdVr/build/
+/GlassVr/build/

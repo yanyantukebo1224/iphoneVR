@@ -196,19 +196,26 @@ struct ContentView: View {
                     streamer.sendPacket(headPos: headPos, headRot: headRot, leftHand: left, rightHand: right)
                 }
             }
+
+            // トラッカーを即座に常時開始
+            trackerManager.startTracking()
+
+            // 0.5秒後に全自動でストリーミング接続をスタート
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if !isStreaming {
+                    streamer.connect(targetIP: targetIP, port: 9050)
+                    isStreaming = true
+                }
+            }
         }
     }
 
     private func toggleStreaming() {
         if isStreaming {
             streamer.stop()
-            trackerManager.stopTracking()
             isStreaming = false
         } else {
             UIApplication.shared.isIdleTimerDisabled = true
-            pairingManager.launchApp(hostIP: targetIP) { success in
-                print("Launch app completed: \(success)")
-            }
             streamer.connect(targetIP: targetIP, port: 9050)
             trackerManager.startTracking()
             isStreaming = true

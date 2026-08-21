@@ -8,6 +8,7 @@ add_library(driver_iphonevr SHARED
     src/driver_main.cpp
     src/hmd_device_driver.cpp
     src/hand_controller_driver.cpp
+    src/hand_simulation.cpp
     src/udp_receiver.cpp
     src/screen_streamer.cpp
 )
