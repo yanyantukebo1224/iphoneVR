@@ -9,6 +9,6 @@ echo ===================================================
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0activate_hmd.ps1"
 
 echo ===================================================
-echo [ALL READY] Start SteamVR & Moonlight on iPhone!
+echo [ALL READY] Start SteamVR and Moonlight on iPhone!
 echo ===================================================
 pause
