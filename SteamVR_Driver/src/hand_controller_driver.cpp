@@ -10,36 +10,6 @@
 #define DEG_TO_RAD(deg) ((deg) * 0.017453292519943295f)
 #endif
 
-enum EOpenVRBone {
-    eBone_Root = 0,
-    eBone_Wrist,
-    eBone_Thumb0,
-    eBone_Thumb1,
-    eBone_Thumb2,
-    eBone_IndexFinger0,
-    eBone_IndexFinger1,
-    eBone_IndexFinger2,
-    eBone_IndexFinger3,
-    eBone_MiddleFinger0,
-    eBone_MiddleFinger1,
-    eBone_MiddleFinger2,
-    eBone_MiddleFinger3,
-    eBone_RingFinger0,
-    eBone_RingFinger1,
-    eBone_RingFinger2,
-    eBone_RingFinger3,
-    eBone_PinkyFinger0,
-    eBone_PinkyFinger1,
-    eBone_PinkyFinger2,
-    eBone_PinkyFinger3,
-    eBone_Aux_Thumb,
-    eBone_Aux_IndexFinger,
-    eBone_Aux_MiddleFinger,
-    eBone_Aux_RingFinger,
-    eBone_Aux_PinkyFinger,
-    eBone_Count
-};
-
 static inline vr::HmdVector3_t RotateVectorByQuat(const vr::HmdQuaternion_t& q, const vr::HmdVector3_t& v) {
     double qvW = 0.0, qvX = (double)v.v[0], qvY = (double)v.v[1], qvZ = (double)v.v[2];
     double qCW = q.w, qCX = -q.x, qCY = -q.y, qCZ = -q.z;
@@ -56,25 +26,39 @@ static inline vr::HmdVector3_t RotateVectorByQuat(const vr::HmdQuaternion_t& q, 
     return res;
 }
 
+static float CalculateFingerAngleCurl(const BoneTransform& mcp, const BoneTransform& pip, const BoneTransform& tip) {
+    float v1x = pip.position.x - mcp.position.x;
+    float v1y = pip.position.y - mcp.position.y;
+    float v1z = pip.position.z - mcp.position.z;
+    float len1 = std::sqrt(v1x * v1x + v1y * v1y + v1z * v1z);
+
+    float v2x = tip.position.x - pip.position.x;
+    float v2y = tip.position.y - pip.position.y;
+    float v2z = tip.position.z - pip.position.z;
+    float len2 = std::sqrt(v2x * v2x + v2y * v2y + v2z * v2z);
+
+    if (len1 < 0.001f || len2 < 0.001f) return 0.0f;
+
+    float dot = (v1x * v2x + v1y * v2y + v1z * v2z) / (len1 * len2);
+    dot = std::clamp(dot, -1.0f, 1.0f);
+    float angleRad = std::acos(dot);
+
+    return std::clamp(angleRad / 1.5708f, 0.0f, 1.0f);
+}
+
 void HandControllerDriver::ConvertVision21ToSteamVR31(
     const HandPacketData& handData,
     vr::VRBoneTransform_t outBones[31],
     vr::ETrackedControllerRole role
 ) {
-    float curlThumb  = std::clamp(handData.curls.thumb, 0.0f, 1.0f);
-    float curlIndex  = std::clamp(handData.curls.index, 0.0f, 1.0f);
-    float curlMiddle = std::clamp(handData.curls.middle, 0.0f, 1.0f);
-    float curlRing   = std::clamp(handData.curls.ring, 0.0f, 1.0f);
-    float curlPinky  = std::clamp(handData.curls.pinky, 0.0f, 1.0f);
+    float curlThumb  = CalculateFingerAngleCurl(handData.joints[1], handData.joints[2], handData.joints[4]);
+    float curlIndex  = CalculateFingerAngleCurl(handData.joints[5], handData.joints[6], handData.joints[8]);
+    float curlMiddle = CalculateFingerAngleCurl(handData.joints[9], handData.joints[10], handData.joints[12]);
+    float curlRing   = CalculateFingerAngleCurl(handData.joints[13], handData.joints[14], handData.joints[16]);
+    float curlPinky  = CalculateFingerAngleCurl(handData.joints[17], handData.joints[18], handData.joints[20]);
 
     MyFingerCurls curls = { curlThumb, curlIndex, curlMiddle, curlRing, curlPinky };
-    MyFingerSplays splays = {
-        handData.splays.thumb,
-        handData.splays.index,
-        handData.splays.middle,
-        handData.splays.ring,
-        handData.splays.pinky
-    };
+    MyFingerSplays splays = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 
     static MyHandSimulation sim;
     sim.ComputeSkeletonTransforms(role, curls, splays, outBones);
@@ -245,13 +229,13 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
 
     auto now = std::chrono::steady_clock::now();
 
-    // 1. Local wrist position relative to HMD head
+    // 1. Wrist 3D Position
     vr::HmdVector3_t localWrist;
     if (handData.isTracked == 1) {
         m_lastMovementTime = now;
-        localWrist.v[0] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.x, -0.60f, 0.60f);
-        localWrist.v[1] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.y, -0.60f, 0.40f);
-        localWrist.v[2] = std::clamp(handData.joints[VISION_JOINT_WRIST].position.z, -0.75f, -0.15f);
+        localWrist.v[0] = std::clamp(handData.joints[0].position.x, -0.60f, 0.60f);
+        localWrist.v[1] = std::clamp(handData.joints[0].position.y, -0.60f, 0.40f);
+        localWrist.v[2] = std::clamp(handData.joints[0].position.z, -0.75f, -0.15f);
     } else {
         localWrist.v[0] = isLeft ? -0.22f : 0.22f;
         localWrist.v[1] = -0.20f;
@@ -281,15 +265,38 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     qKnucklesOffset.y = cr * sp * cy + sr * cp * sy;
     qKnucklesOffset.z = cr * cp * sy - sr * sp * cy;
 
-    // 3. Wrist Orientation Twist
-    vr::HmdQuaternion_t qWrist;
-    qWrist.w = (double)handData.joints[VISION_JOINT_WRIST].orientation.w;
-    qWrist.x = (double)handData.joints[VISION_JOINT_WRIST].orientation.x;
-    qWrist.y = (double)handData.joints[VISION_JOINT_WRIST].orientation.y;
-    qWrist.z = (double)handData.joints[VISION_JOINT_WRIST].orientation.z;
+    // 3. Solve 3D Wrist Orientation from 21 MediaPipe Landmarks
+    vr::HmdQuaternion_t qWrist = { 1.0, 0.0, 0.0, 0.0 };
+    if (handData.isTracked == 1) {
+        float fwdX = handData.joints[9].position.x - handData.joints[0].position.x;
+        float fwdY = handData.joints[9].position.y - handData.joints[0].position.y;
+        float fwdZ = handData.joints[9].position.z - handData.joints[0].position.z;
+        float fLen = std::sqrt(fwdX * fwdX + fwdY * fwdY + fwdZ * fwdZ);
 
-    if (qWrist.w == 0.0 && qWrist.x == 0.0 && qWrist.y == 0.0 && qWrist.z == 0.0) {
-        qWrist.w = 1.0;
+        if (fLen > 0.01f) {
+            fwdX /= fLen; fwdY /= fLen; fwdZ /= fLen;
+
+            float rX = handData.joints[17].position.x - handData.joints[5].position.x;
+            float rY = handData.joints[17].position.y - handData.joints[5].position.y;
+            float rZ = handData.joints[17].position.z - handData.joints[5].position.z;
+            float rLen = std::sqrt(rX * rX + rY * rY + rZ * rZ);
+
+            if (rLen > 0.01f) {
+                rX /= rLen; rY /= rLen; rZ /= rLen;
+                float upX = rY * fwdZ - rZ * fwdY;
+                float upY = rZ * fwdX - rX * fwdZ;
+                float upZ = rX * fwdY - rY * fwdX;
+
+                double trace = rX + upY + fwdZ;
+                if (trace > 0) {
+                    double s = 0.5 / sqrt(trace + 1.0);
+                    qWrist.w = 0.25 / s;
+                    qWrist.x = (upZ - fwdY) * s;
+                    qWrist.y = (fwdX - rZ) * s;
+                    qWrist.z = (rY - upX) * s;
+                }
+            }
+        }
     }
 
     vr::HmdQuaternion_t qCombinedLocal = QuatMultiply(qWrist, qKnucklesOffset);

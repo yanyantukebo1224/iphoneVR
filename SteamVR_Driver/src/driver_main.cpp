@@ -27,54 +27,23 @@ public:
         }
 
         m_pUdpReceiver = new UDPReceiver();
-        static auto lastLogTime = std::chrono::steady_clock::now();
         m_pUdpReceiver->Start(9050, [this](const TrackingPacket& packet) {
             if (m_pHmdDriver) {
                 m_pHmdDriver->UpdateHeadPose(packet.headPosition, packet.headRotation);
             }
-            if (m_pLeftHandDriver) {
-                m_pLeftHandDriver->UpdateHandPose(packet.hands[0], packet.headPosition, packet.headRotation);
-            }
-            if (m_pRightHandDriver) {
-                m_pRightHandDriver->UpdateHandPose(packet.hands[1], packet.headPosition, packet.headRotation);
-            }
 
-            // Debug log tracking packets every 1 second
-            std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
-            auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastLogTime).count();
-            if (diff > 1000) {
-                lastLogTime = currentTime;
-                FILE* f = fopen("tracking_debug.log", "w");
-                if (f) {
-                    const auto& lh = packet.hands[0];
-                    const auto& rh = packet.hands[1];
-                    fprintf(f, "=== iPhoneVR Live Tracking Debug ===\n");
-                    fprintf(f, "Head: Pos(%.2f, %.2f, %.2f) Rot(%.2f, %.2f, %.2f, %.2f)\n",
-                        packet.headPosition.x, packet.headPosition.y, packet.headPosition.z,
-                        packet.headRotation.w, packet.headRotation.x, packet.headRotation.y, packet.headRotation.z);
-                    fprintf(f, "\n[LEFT HAND] Tracked:%d Pinch:%d Dist:%.3f\n", lh.isTracked, lh.isPinching, lh.pinchDistance);
-                    fprintf(f, "  Wrist Pos:(%.2f, %.2f, %.2f) Rot:(w:%.2f, x:%.2f, y:%.2f, z:%.2f)\n",
-                        lh.joints[0].position.x, lh.joints[0].position.y, lh.joints[0].position.z,
-                        lh.joints[0].orientation.w, lh.joints[0].orientation.x, lh.joints[0].orientation.y, lh.joints[0].orientation.z);
-                    fprintf(f, "  Curls: Thumb:%.2f Index:%.2f Mid:%.2f Ring:%.2f Pinky:%.2f\n",
-                        lh.curls.thumb, lh.curls.index, lh.curls.middle, lh.curls.ring, lh.curls.pinky);
-                    fprintf(f, "  Joy-Con Connected:%d Mask:0x%X Trig:%.2f Grip:%.2f Stick:(%.2f, %.2f)\n",
-                        lh.controller.isConnected, lh.controller.buttonMask, lh.controller.triggerValue, lh.controller.gripValue, lh.controller.stickX, lh.controller.stickY);
-                    
-                    fprintf(f, "\n[RIGHT HAND] Tracked:%d Pinch:%d Dist:%.3f\n", rh.isTracked, rh.isPinching, rh.pinchDistance);
-                    fprintf(f, "  Wrist Pos:(%.2f, %.2f, %.2f) Rot:(w:%.2f, x:%.2f, y:%.2f, z:%.2f)\n",
-                        rh.joints[0].position.x, rh.joints[0].position.y, rh.joints[0].position.z,
-                        rh.joints[0].orientation.w, rh.joints[0].orientation.x, rh.joints[0].orientation.y, rh.joints[0].orientation.z);
-                    fprintf(f, "  Curls: Thumb:%.2f Index:%.2f Mid:%.2f Ring:%.2f Pinky:%.2f\n",
-                        rh.curls.thumb, rh.curls.index, rh.curls.middle, rh.curls.ring, rh.curls.pinky);
-                    fprintf(f, "  Joy-Con Connected:%d Mask:0x%X Trig:%.2f Grip:%.2f Stick:(%.2f, %.2f)\n",
-                        rh.controller.isConnected, rh.controller.buttonMask, rh.controller.triggerValue, rh.controller.gripValue, rh.controller.stickX, rh.controller.stickY);
-                    fclose(f);
-                }
+            const auto& handA = packet.hands[0];
+            const auto& handB = packet.hands[1];
+
+            if (handA.chirality == 0) {
+                if (m_pLeftHandDriver) m_pLeftHandDriver->UpdateHandPose(handA, packet.headPosition, packet.headRotation);
+                if (m_pRightHandDriver) m_pRightHandDriver->UpdateHandPose(handB, packet.headPosition, packet.headRotation);
+            } else {
+                if (m_pRightHandDriver) m_pRightHandDriver->UpdateHandPose(handA, packet.headPosition, packet.headRotation);
+                if (m_pLeftHandDriver) m_pLeftHandDriver->UpdateHandPose(handB, packet.headPosition, packet.headRotation);
             }
         });
 
-        // 🖥️ PC画面丸ごと iPhone VR 直接配信サーバー起動 (Port 9051)
         m_pScreenStreamer = new ScreenStreamer();
         m_pScreenStreamer->Start(9051);
 
