@@ -168,18 +168,6 @@ void HandControllerDriver::ConvertVision21ToSteamVR31(
     float curlRing   = std::clamp(handData.curls.ring, 0.0f, 1.0f);
     float curlPinky  = std::clamp(handData.curls.pinky, 0.0f, 1.0f);
 
-    if (handData.controller.isConnected == 1) {
-        float trigVal = handData.controller.triggerValue;
-        float gripVal = handData.controller.gripValue;
-        bool isStickTouched = (std::abs(handData.controller.stickX) > 0.05f || std::abs(handData.controller.stickY) > 0.05f);
-
-        curlIndex = std::max(0.25f, trigVal);
-        curlMiddle = std::max(0.65f, gripVal);
-        curlRing = std::max(0.70f, gripVal);
-        curlPinky = std::max(0.75f, gripVal);
-        curlThumb = isStickTouched ? 0.35f : 0.15f;
-    }
-
     MyFingerCurls curls = { curlThumb, curlIndex, curlMiddle, curlRing, curlPinky };
     MyFingerSplays splays = {
         handData.splays.thumb,

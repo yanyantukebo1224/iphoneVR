@@ -87,14 +87,14 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let leftInput = gcMgr.getInputData(for: 0)
         let rightInput = gcMgr.getInputData(for: 1)
 
-        // Joy-Conコントローラーが接続されている場合のオーバーライド
+        // Joy-Conコントローラーが接続されている場合：ボタン・スティック入力のみをセットし、指アニメーションはカメラトラッキングを100%優先
         if leftInput.isConnected == 1 {
             if newLeft == nil { newLeft = createBaseHandData(chirality: 0) }
-            applyControllerInput(handData: &newLeft!, input: leftInput, isLeft: true)
+            newLeft?.controller = leftInput
         }
         if rightInput.isConnected == 1 {
             if newRight == nil { newRight = createBaseHandData(chirality: 1) }
-            applyControllerInput(handData: &newRight!, input: rightInput, isLeft: false)
+            newRight?.controller = rightInput
         }
 
         DispatchQueue.main.async {
