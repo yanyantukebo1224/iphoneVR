@@ -245,7 +245,7 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
 
     auto now = std::chrono::steady_clock::now();
 
-    // Natural local wrist offset relative to HMD head
+    // 1. Local wrist position relative to HMD head
     vr::HmdVector3_t localWrist;
     if (handData.isTracked == 1) {
         m_lastMovementTime = now;
@@ -258,13 +258,12 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         localWrist.v[2] = -0.35f;
     }
 
-    // Rotate local wrist offset by head rotation into world space
     vr::HmdVector3_t worldWrist = RotateVectorByQuat(qHead, localWrist);
     m_pose.vecPosition[0] = headPos.x + worldWrist.v[0];
     m_pose.vecPosition[1] = effectiveHeadY + worldWrist.v[1];
     m_pose.vecPosition[2] = headPos.z + worldWrist.v[2];
 
-    // Perfect Valve Index Knuckles Controller Mesh Ergonomic Orientation Offset
+    // 2. Knuckles base grip offset
     double pitchAngle = -1.047;
     double yawAngle   = isLeft ? 0.261 : -0.261;
     double rollAngle  = isLeft ? 1.5707 : -1.5707;
@@ -282,20 +281,32 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
     qKnucklesOffset.y = cr * sp * cy + sr * cp * sy;
     qKnucklesOffset.z = cr * cp * sy - sr * sp * cy;
 
-    m_pose.qRotation = QuatMultiply(qHead, qKnucklesOffset);
+    // 3. Wrist Orientation Twist
+    vr::HmdQuaternion_t qWrist;
+    qWrist.w = (double)handData.joints[VISION_JOINT_WRIST].orientation.w;
+    qWrist.x = (double)handData.joints[VISION_JOINT_WRIST].orientation.x;
+    qWrist.y = (double)handData.joints[VISION_JOINT_WRIST].orientation.y;
+    qWrist.z = (double)handData.joints[VISION_JOINT_WRIST].orientation.z;
+
+    if (qWrist.w == 0.0 && qWrist.x == 0.0 && qWrist.y == 0.0 && qWrist.z == 0.0) {
+        qWrist.w = 1.0;
+    }
+
+    vr::HmdQuaternion_t qCombinedLocal = QuatMultiply(qWrist, qKnucklesOffset);
+    m_pose.qRotation = QuatMultiply(qHead, qCombinedLocal);
 
     if (m_unObjectId != vr::k_unTrackedDeviceIndexInvalid) {
         vr::VRServerDriverHost()->TrackedDevicePoseUpdated(m_unObjectId, m_pose, sizeof(vr::DriverPose_t));
 
-        // Full Controller Input Mapping (Strict matching with TrackingProtocol.swift ControllerButtonBits)
-        bool btnPrimary = false;   // Bit 0 (1<<0): btnAorX (Right A, Left X)
-        bool btnSecondary = false; // Bit 1 (1<<1): btnBorY (Right B, Left Y)
-        bool btnXorPlus = false;   // Bit 2 (1<<2): btnXorPlus
-        bool btnYorMinus = false;  // Bit 3 (1<<3): btnYorMinus
-        bool btnTrigClick = false; // Bit 4 (1<<4): btnTriggerClick
-        bool btnGripClick = false; // Bit 5 (1<<5): btnGripClick
-        bool btnStickClick = false;// Bit 6 (1<<6): btnThumbstickClick
-        bool btnSystem = false;    // Bit 7 (1<<7): btnSystem
+        // Full Controller Input Mapping
+        bool btnPrimary = false;   // Bit 0: A/X
+        bool btnSecondary = false; // Bit 1: B/Y
+        bool btnXorPlus = false;   // Bit 2: X/+
+        bool btnYorMinus = false;  // Bit 3: Y/-
+        bool btnTrigClick = false; // Bit 4: Trigger Click
+        bool btnGripClick = false; // Bit 5: Grip Click
+        bool btnStickClick = false;// Bit 6: Stick Click
+        bool btnSystem = false;    // Bit 7: System Button
 
         float trigVal = 0.0f;
         float gripVal = 0.0f;
@@ -325,14 +336,12 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
                 gripVal = 1.0f;
             }
         } else if (handData.isPinching == 1) {
-            // Camera Hand Pinch -> Auto Trigger / Primary Click
             trigVal = 1.0f;
             btnPrimary = true;
         }
 
         bool isStickTouched = (std::abs(stickX) > 0.05f || std::abs(stickY) > 0.05f);
 
-        // Buttons
         if (isLeft) {
             vr::VRDriverInput()->UpdateBooleanComponent(m_ulXButtonComponent, btnPrimary || btnXorPlus, 0);
             vr::VRDriverInput()->UpdateBooleanComponent(m_ulXTouchComponent, btnPrimary || btnXorPlus, 0);
@@ -345,7 +354,6 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
             vr::VRDriverInput()->UpdateBooleanComponent(m_ulBTouchComponent, btnSecondary || btnYorMinus, 0);
         }
 
-        // Trigger & Grip
         vr::VRDriverInput()->UpdateScalarComponent(m_ulTriggerValueComponent, trigVal, 0);
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerClickComponent, (trigVal > 0.65f) || btnTrigClick, 0);
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulTriggerTouchComponent, trigVal > 0.05f, 0);
@@ -354,7 +362,6 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripClickComponent, (gripVal > 0.65f) || btnGripClick, 0);
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulGripTouchComponent, gripVal > 0.05f, 0);
 
-        // Thumbstick (and Mirror to Trackpad for maximum VRChat / SteamVR game compatibility)
         vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickXComponent, stickX, 0);
         vr::VRDriverInput()->UpdateScalarComponent(m_ulThumbstickYComponent, stickY, 0);
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulThumbstickClickComponent, btnStickClick, 0);
@@ -365,11 +372,9 @@ void HandControllerDriver::UpdateHandPose(const HandPacketData& handData, const 
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulTrackpadClickComponent, btnStickClick, 0);
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulTrackpadTouchComponent, isStickTouched, 0);
 
-        // System / Menu Button
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulSystemButtonComponent, btnSystem, 0);
         vr::VRDriverInput()->UpdateBooleanComponent(m_ulSystemTouchComponent, btnSystem, 0);
 
-        // Skeletal Animation Mesh (31-Bone Knuckles)
         vr::VRBoneTransform_t bones[31];
         ConvertVision21ToSteamVR31(handData, bones, m_role);
         vr::VRDriverInput()->UpdateSkeletonComponent(m_ulSkeletonComponent, vr::VRSkeletalMotionRange_WithController, bones, 31);

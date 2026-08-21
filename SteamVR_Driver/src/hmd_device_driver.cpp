@@ -1,5 +1,10 @@
 #include "hmd_device_driver.h"
 #include <cstring>
+#include <cmath>
+
+static bool g_recenterInitialized = false;
+static float g_initYaw = 0.0f;
+static Vector3f g_initPos = {0.0f, 0.0f, 0.0f};
 
 HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(vr::k_unTrackedDeviceIndexInvalid), m_ulPropertyContainer(vr::k_ulInvalidPropertyContainer) {
     std::memset(&m_pose, 0, sizeof(m_pose));
@@ -11,7 +16,6 @@ HMDDeviceDriver::HMDDeviceDriver() : m_unObjectId(vr::k_unTrackedDeviceIndexInva
     m_pose.qWorldFromDriverRotation.w = 1.0;
     m_pose.qDriverFromHeadRotation.w = 1.0;
 
-    // Default eye level height 1.65m
     m_config.offsetY = 1.65f;
 }
 
@@ -75,15 +79,12 @@ void* HMDDeviceDriver::GetComponent(const char* pchComponentNameAndVersion) {
 void HMDDeviceDriver::Present(const vr::PresentInfo_t *pPresentInfo, uint32_t unPresentInfoSize) {
     m_lastVsyncTime = std::chrono::high_resolution_clock::now();
     m_frameCounter++;
-    if (pPresentInfo && pPresentInfo->backbufferTextureHandle) {
-        // GPU Direct Present
-    }
 }
 
 void HMDDeviceDriver::WaitForPresent() {
     auto now = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - m_lastVsyncTime).count();
-    const int64_t targetFrameMicroseconds = 16666; // 60 FPS (16.66ms)
+    const int64_t targetFrameMicroseconds = 16666;
     if (elapsed < targetFrameMicroseconds) {
         std::this_thread::sleep_for(std::chrono::microseconds(targetFrameMicroseconds - elapsed));
     }
@@ -135,9 +136,29 @@ void HMDDeviceDriver::UpdateHeadPose(const Vector3f& headPos, const Quaternionf&
     m_pose.poseIsValid = true;
     m_pose.result = vr::TrackingResult_Running_OK;
 
-    m_pose.vecPosition[0] = (headPos.x * m_config.posXMultiplier) + m_config.offsetX;
-    m_pose.vecPosition[1] = (headPos.y * m_config.posYMultiplier) + m_config.offsetY;
-    m_pose.vecPosition[2] = (headPos.z * m_config.posZMultiplier) + m_config.offsetZ;
+    // 初回トラッキング受信時に正面 Yaw 角度・初期原点位置をキャリブレーション
+    if (!g_recenterInitialized && (headPos.x != 0.0f || headPos.y != 0.0f || headPos.z != 0.0f)) {
+        g_initPos = headPos;
+        double siny_cosp = 2.0 * (headRot.w * headRot.y + headRot.x * headRot.z);
+        double cosy_cosp = 1.0 - 2.0 * (headRot.x * headRot.x + headRot.y * headRot.y);
+        g_initYaw = (float)std::atan2(siny_cosp, cosy_cosp);
+        g_recenterInitialized = true;
+    }
+
+    float relX = headPos.x - g_initPos.x;
+    float relY = headPos.y - g_initPos.y;
+    float relZ = headPos.z - g_initPos.z;
+
+    // Yaw リセット補正回転の適用
+    float cosY = std::cos(-g_initYaw);
+    float sinY = std::sin(-g_initYaw);
+
+    float rotX = relX * cosY - relZ * sinY;
+    float rotZ = relX * sinY + relZ * cosY;
+
+    m_pose.vecPosition[0] = (rotX * m_config.posXMultiplier) + m_config.offsetX;
+    m_pose.vecPosition[1] = (relY * m_config.posYMultiplier) + m_config.offsetY;
+    m_pose.vecPosition[2] = (rotZ * m_config.posZMultiplier) + m_config.offsetZ;
 
     m_pose.qRotation.w = m_config.invertRotW ? -headRot.w : headRot.w;
     m_pose.qRotation.x = m_config.invertRotX ? -headRot.x : headRot.x;
