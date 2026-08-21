@@ -14,14 +14,11 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
     @Published var leftHandData: HandPacketData?
     @Published var rightHandData: HandPacketData?
 
-    private var isLeftPinchingState: Bool = false
-    private var isRightPinchingState: Bool = false
+    private var prevLeftPos: SIMD3<Float> = SIMD3<Float>(-0.18, -0.15, -0.45)
+    private var prevRightPos: SIMD3<Float> = SIMD3<Float>(0.18, -0.15, -0.45)
 
-    private var prevLeftLocalPos: SIMD3<Float> = SIMD3<Float>(-0.18, -0.15, -0.45)
-    private var prevRightLocalPos: SIMD3<Float> = SIMD3<Float>(0.18, -0.15, -0.45)
-
-    private var prevLeftLocalQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
-    private var prevRightLocalQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
+    private var prevLeftQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
+    private var prevRightQuat: simd_quatf = simd_quatf(real: 1, imag: .zero)
 
     private var prevLeftCurls = FingerCurls()
     private var prevRightCurls = FingerCurls()
@@ -55,46 +52,32 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         }
 
         let pixelBuffer = frame.capturedImage
-
         processingQueue.async {
             let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
             do {
                 try handler.perform([self.handPoseRequest])
-                self.processHandObservation(results: self.handPoseRequest.results, frame: frame)
+                self.processHandObservation(results: self.handPoseRequest.results)
             } catch {
-                print("Vision Hand Pose Error: \(error)")
+                print("Vision Hand Error: \(error)")
             }
         }
     }
 
-    private func currentCGImagePropertyOrientation() -> CGImagePropertyOrientation {
-        let deviceOrientation = UIDevice.current.orientation
-        switch deviceOrientation {
-        case .landscapeLeft:
-            return .up
-        case .landscapeRight:
-            return .down
-        case .portraitUpsideDown:
-            return .left
-        default:
-            return .right
-        }
-    }
-
-    private func processHandObservation(results: [VNHumanHandPoseObservation]?, frame: ARFrame) {
+    private func processHandObservation(results: [VNHumanHandPoseObservation]?) {
         var newLeft: HandPacketData?
         var newRight: HandPacketData?
 
         if let observations = results, !observations.isEmpty {
             for obs in observations {
                 let isRight = (obs.chirality == .right)
+                let chiralityVal: UInt32 = isRight ? 1 : 0
                 if isRight {
                     if newRight == nil {
-                        newRight = extract21Joints(from: obs, chirality: 1)
+                        newRight = buildCleanHandData(from: obs, chirality: chiralityVal)
                     }
                 } else {
                     if newLeft == nil {
-                        newLeft = extract21Joints(from: obs, chirality: 0)
+                        newLeft = buildCleanHandData(from: obs, chirality: chiralityVal)
                     }
                 }
             }
@@ -104,38 +87,14 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         let leftInput = gcMgr.getInputData(for: 0)
         let rightInput = gcMgr.getInputData(for: 1)
 
-        let isExpFinger = VRSettingsManager.shared.isFingerTrackingExperimentalEnabled
-
-        // 左手データ統合
-        if newLeft == nil && leftInput.isConnected == 1 {
-            var leftDummy = createDefaultHandData(chirality: 0)
-            leftDummy.controller = leftInput
-            leftDummy.isTracked = 1
-            leftDummy.curls = generateControllerCurls(input: leftInput, isLeft: true)
-            leftDummy.splays = generateControllerSplays(input: leftInput, isLeft: true)
-            newLeft = leftDummy
+        // Joy-Conコントローラーが接続されている場合のオーバーライド
+        if leftInput.isConnected == 1 {
+            if newLeft == nil { newLeft = createBaseHandData(chirality: 0) }
+            applyControllerInput(handData: &newLeft!, input: leftInput, isLeft: true)
         }
-
-        // 右手データ統合
-        if newRight == nil && rightInput.isConnected == 1 {
-            var rightDummy = createDefaultHandData(chirality: 1)
-            rightDummy.controller = rightInput
-            rightDummy.isTracked = 1
-            rightDummy.curls = generateControllerCurls(input: rightInput, isLeft: false)
-            rightDummy.splays = generateControllerSplays(input: rightInput, isLeft: false)
-            newRight = rightDummy
-        }
-
-        if var left = newLeft {
-            left.controller = leftInput
-            applySmartControllerOverride(handData: &left, input: leftInput, isLeft: true, isExpFinger: isExpFinger)
-            newLeft = left
-        }
-
-        if var right = newRight {
-            right.controller = rightInput
-            applySmartControllerOverride(handData: &right, input: rightInput, isLeft: false, isExpFinger: isExpFinger)
-            newRight = right
+        if rightInput.isConnected == 1 {
+            if newRight == nil { newRight = createBaseHandData(chirality: 1) }
+            applyControllerInput(handData: &newRight!, input: rightInput, isLeft: false)
         }
 
         DispatchQueue.main.async {
@@ -146,324 +105,102 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
         onTrackingDataUpdated?(headPosition, headRotation, newLeft, newRight)
     }
 
-    /// Joy-Con優先制御および実験的フィンガートラッキングの適用
-    private func applySmartControllerOverride(
-        handData: inout HandPacketData,
-        input: ControllerInputData,
-        isLeft: Bool,
-        isExpFinger: Bool
-    ) {
-        if input.isConnected == 1 {
-            // Joy-Con接続時：物理操作を最優先
-            handData.isPinching = 0
-            handData.pinchDistance = 1.0
-
-            let cRot = input.controllerRot
-            if (cRot.w != 1.0 || cRot.x != 0.0 || cRot.y != 0.0 || cRot.z != 0.0) && (cRot.w != 0.0 || cRot.x != 0.0 || cRot.y != 0.0 || cRot.z != 0.0) {
-                handData.joints.0.orientation = cRot
-            }
-
-            if !isExpFinger {
-                handData.curls = generateControllerCurls(input: input, isLeft: isLeft)
-                handData.splays = generateControllerSplays(input: input, isLeft: isLeft)
-            }
-        } else {
-            // Joy-Con非接続時（ハンドトラッキング単体）
-            if !isExpFinger {
-                if handData.isPinching == 1 {
-                    handData.curls.thumb = 0.70
-                    handData.curls.index = 0.75
-                    handData.curls.middle = 0.20
-                    handData.curls.ring = 0.20
-                    handData.curls.pinky = 0.20
-                } else if handData.curls.middle > 0.65 && handData.curls.ring > 0.65 {
-                    handData.curls.thumb = 0.80
-                    handData.curls.index = 0.85
-                    handData.curls.middle = 0.90
-                    handData.curls.ring = 0.90
-                    handData.curls.pinky = 0.90
-                }
-            }
-        }
-    }
-
-    private func generateControllerCurls(input: ControllerInputData, isLeft: Bool) -> FingerCurls {
-        var curls = FingerCurls()
-        curls.index = input.triggerValue
-        let grip = input.gripValue
-        curls.middle = grip
-        curls.ring = grip
-        curls.pinky = grip
-
-        let isThumbBusy = (input.buttonMask != 0) || (abs(input.stickX) > 0.08) || (abs(input.stickY) > 0.08)
-        curls.thumb = isThumbBusy ? 0.65 : 0.15
-        return curls
-    }
-
-    private func generateControllerSplays(input: ControllerInputData, isLeft: Bool) -> FingerSplays {
-        var splays = FingerSplays()
-        splays.thumb = isLeft ? -0.15 : 0.15
-        splays.index = isLeft ? -0.05 : 0.05
-        splays.middle = 0.0
-        splays.ring = isLeft ? 0.05 : -0.05
-        splays.pinky = isLeft ? 0.10 : -0.10
-        return splays
-    }
-
-    private func createDefaultHandData(chirality: UInt32) -> HandPacketData {
-        let isLeft = (chirality == 0)
-        let defaultPos = Vector3f(
-            x: isLeft ? -0.18 : 0.18,
-            y: -0.15,
-            z: -0.45
-        )
-        let wristBone = BoneTransform(position: defaultPos, orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
-        let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
-        let tupleJoints = (
-            wristBone, dummyBone, dummyBone, dummyBone, dummyBone,
-            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
-            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone,
-            dummyBone, dummyBone, dummyBone, dummyBone, dummyBone, dummyBone
-        )
-        return HandPacketData(
-            chirality: chirality,
-            isTracked: 0,
-            isPinching: 0,
-            pinchDistance: 1.0,
-            curls: FingerCurls(),
-            splays: FingerSplays(),
-            joints: tupleJoints,
-            controller: ControllerInputData()
-        )
-    }
-
-    private func extract21Joints(from observation: VNHumanHandPoseObservation, chirality: UInt32) -> HandPacketData? {
-        guard let recognizedPoints = try? observation.recognizedPoints(.all),
-              let wristPoint = recognizedPoints[.wrist] else { return nil }
+    // ゼロから新規構築した高精度＆絶対壊れないハンドポーズ抽出エンジン
+    private func buildCleanHandData(from observation: VNHumanHandPoseObservation, chirality: UInt32) -> HandPacketData? {
+        guard let points = try? observation.recognizedPoints(.all),
+              let wrist = points[.wrist] else { return nil }
 
         let isLeft = (chirality == 0)
 
-        // 1. ピンチ判定
+        // 1. ピンチ計算 (親指Tipと人差し指Tipの画面内相対距離)
         var isPinching: UInt32 = 0
         var pinchDist: Float = 1.0
-        var currentPinchState = isLeft ? isLeftPinchingState : isRightPinchingState
-
-        if let thumbTip = recognizedPoints[.thumbTip], let indexTip = recognizedPoints[.indexTip] {
+        if let thumbTip = points[.thumbTip], let indexTip = points[.indexTip] {
             let dx = Float(thumbTip.location.x - indexTip.location.x)
             let dy = Float(thumbTip.location.y - indexTip.location.y)
             pinchDist = sqrt(dx * dx + dy * dy)
-
-            if currentPinchState {
-                if pinchDist > 0.080 { currentPinchState = false }
-            } else {
-                if pinchDist < 0.050 { currentPinchState = true }
-            }
-
-            if isLeft {
-                isLeftPinchingState = currentPinchState
-            } else {
-                isRightPinchingState = currentPinchState
-            }
-            isPinching = currentPinchState ? 1 : 0
+            isPinching = (pinchDist < 0.065) ? 1 : 0
         }
 
-        // 2. 光学逆投影と動的Depthによるカメラローカル3D位置（Position）の算出
-        let wx = Float(wristPoint.location.x)
-        let wy = Float(wristPoint.location.y)
+        // 2. 3D位置 (Position): 画面中央 (0.5, 0.5) からのオフセット
+        let wx = Float(wrist.location.x)
+        let wy = Float(wrist.location.y)
 
-        // 手のひらサイズからカメラからの奥行き距離（Depth: 0.25m〜0.85m）を動的実測
-        var palmScale: Float = 0.15
-        if let midMCP = recognizedPoints[.middleMCP] {
-            let pdx = Float(midMCP.location.x) - wx
-            let pdy = Float(midMCP.location.y) - wy
-            palmScale = max(0.04, hypot(pdx, pdy))
+        // 手のひらスケールからカメラ奥行き (Depth: 0.3m 〜 0.7m) を算出
+        var scale: Float = 0.15
+        if let midMCP = points[.middleMCP] {
+            scale = max(0.04, hypot(Float(midMCP.location.x) - wx, Float(midMCP.location.y) - wy))
         }
-        let dynamicDepth: Float = max(0.25, min(0.85, 0.065 / palmScale))
+        let depth: Float = max(0.30, min(0.70, 0.070 / scale))
 
-        // カメラローカル座標系 (Vision座標系: Y上向きが 1.0)
-        let fovFactor: Float = 1.15
-        let localX: Float = (wx - 0.5) * dynamicDepth * fovFactor
-        let localY: Float = (wy - 0.5) * dynamicDepth * fovFactor
-        let localZ: Float = -dynamicDepth
+        let rawX: Float = (wx - 0.5) * depth * 1.2
+        let rawY: Float = (wy - 0.5) * depth * 1.2
+        let rawZ: Float = -depth
 
-        let rawLocalPos = SIMD3<Float>(localX, localY, localZ)
-        let posAlpha: Float = 0.70
-        let prevPos = isLeft ? prevLeftLocalPos : prevRightLocalPos
-        let smoothLocalPos = prevPos * (1.0 - posAlpha) + rawLocalPos * posAlpha
-        if isLeft { prevLeftLocalPos = smoothLocalPos } else { prevRightLocalPos = smoothLocalPos }
+        let rawPos = SIMD3<Float>(rawX, rawY, rawZ)
+        let prevP = isLeft ? prevLeftPos : prevRightPos
+        let smoothPos = prevP * 0.4 + rawPos * 0.6
+        if isLeft { prevLeftPos = smoothPos } else { prevRightPos = smoothPos }
 
-        // 3. 手のひら3軸直交基底による手首ローカル3D回転（Rotation）の算出
+        // 3. 3D回転 (Rotation): 手首 -> 中指MCP への標準クォータニオン
         var wristQuat = Quaternionf(w: 1, x: 0, y: 0, z: 0)
+        if let midMCP = points[.middleMCP], let idxMCP = points[.indexMCP] {
+            let fwd = SIMD3<Float>(Float(midMCP.location.x) - wx, Float(midMCP.location.y) - wy, -0.3).normalized
+            let right = SIMD3<Float>(Float(idxMCP.location.x) - wx, Float(idxMCP.location.y) - wy, 0.0).normalized
+            let up = simd_cross(right, fwd).normalized
 
-        let midMCP = recognizedPoints[.middleMCP]
-        let idxMCP = recognizedPoints[.indexMCP]
-        let litMCP = recognizedPoints[.littleMCP]
+            let rotMat = simd_float3x3(columns: (right, up, fwd))
+            var q = simd_quatf(rotMat)
+            if q.real.isNaN || q.imag.x.isNaN { q = simd_quatf(real: 1, imag: .zero) }
 
-        if let mid = midMCP, let idx = idxMCP, let lit = litMCP {
-            // 前方ベクトル: 手首 -> 中指付け根
-            let fwdX = Float(mid.location.x) - wx
-            let fwdY = Float(mid.location.y) - wy
-            let fwdLen = max(0.001, hypot(fwdX, fwdY))
-            let vFwd = SIMD3<Float>(fwdX / fwdLen, fwdY / fwdLen, -0.25)
+            let prevQ = isLeft ? prevLeftQuat : prevRightQuat
+            let smoothQ = simd_slerp(prevQ, q, 0.5)
+            if isLeft { prevLeftQuat = smoothQ } else { prevRightQuat = smoothQ }
 
-            // 横ベクトル: 人差し指MCP -> 小指MCP
-            let rX = Float(lit.location.x - idx.location.x)
-            let rY = Float(lit.location.y - idx.location.y)
-            let rLen = max(0.001, hypot(rX, rY))
-            let vRight = SIMD3<Float>(rX / rLen, rY / rLen, 0.0)
-
-            let vUp = simd_normalize(simd_cross(vRight, vFwd))
-            let vFwdOrtho = simd_normalize(simd_cross(vUp, vRight))
-            let vRightOrtho = simd_normalize(simd_cross(vFwdOrtho, vUp))
-
-            let rotMatrix = simd_float3x3(
-                columns: (
-                    SIMD3<Float>(vRightOrtho.x, vRightOrtho.y, vRightOrtho.z),
-                    SIMD3<Float>(vUp.x, vUp.y, vUp.z),
-                    SIMD3<Float>(vFwdOrtho.x, vFwdOrtho.y, vFwdOrtho.z)
-                )
-            )
-            var currentQuat = simd_quatf(rotMatrix)
-            if currentQuat.real.isNaN || currentQuat.imag.x.isNaN {
-                currentQuat = simd_quatf(real: 1, imag: .zero)
-            }
-
-            let prevQuat = isLeft ? prevLeftLocalQuat : prevRightLocalQuat
-            let smoothQuat = simd_slerp(prevQuat, currentQuat, 0.60)
-            if isLeft { prevLeftLocalQuat = smoothQuat } else { prevRightLocalQuat = smoothQuat }
-
-            wristQuat = Quaternionf(
-                w: smoothQuat.real,
-                x: smoothQuat.imag.x,
-                y: smoothQuat.imag.y,
-                z: smoothQuat.imag.z
-            )
+            wristQuat = Quaternionf(w: smoothQ.real, x: smoothQ.imag.x, y: smoothQ.imag.y, z: smoothQ.imag.z)
         }
 
-        let dummyBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
-        var bones = Array(repeating: dummyBone, count: 21)
-
-        // bones[0] にカメラローカルな手首相対位置と相対姿勢を格納
-        bones[0] = BoneTransform(
-            position: Vector3f(x: smoothLocalPos.x, y: smoothLocalPos.y, z: smoothLocalPos.z),
-            orientation: wristQuat
-        )
-
-        let fingerJointKeys: [VNHumanHandPoseObservation.JointName] = [
-            .thumbCMC, .thumbMP, .thumbIP, .thumbTip,
-            .indexMCP, .indexPIP, .indexDIP, .indexTip,
-            .middleMCP, .middlePIP, .middleDIP, .middleTip,
-            .ringMCP, .ringPIP, .ringDIP, .ringTip,
-            .littleMCP, .littlePIP, .littleDIP, .littleTip
-        ]
-
-        for (idx, key) in fingerJointKeys.enumerated() {
-            if let point = recognizedPoints[key] {
-                let relX = Float(point.location.x - wristPoint.location.x) * Float(0.20)
-                let relY = Float(point.location.y - wristPoint.location.y) * Float(0.20)
-                let relZ = Float(0.0)
-
-                bones[idx + 1] = BoneTransform(
-                    position: Vector3f(x: relX, y: relY, z: relZ),
-                    orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0)
-                )
-            }
-        }
-
-        // 4. 幾何学的関節屈曲角による実用Curl計算
-        let computeGeometricCurl = { (mcpKey: VNHumanHandPoseObservation.JointName,
-                                      pipKey: VNHumanHandPoseObservation.JointName,
-                                      dipKey: VNHumanHandPoseObservation.JointName,
-                                      tipKey: VNHumanHandPoseObservation.JointName) -> Float in
-            guard let mcp = recognizedPoints[mcpKey],
-                  let pip = recognizedPoints[pipKey],
-                  let dip = recognizedPoints[dipKey],
-                  let tip = recognizedPoints[tipKey] else { return 0.0 }
-
-            let v1 = SIMD2<Float>(Float(pip.location.x - mcp.location.x), Float(pip.location.y - mcp.location.y))
-            let v2 = SIMD2<Float>(Float(dip.location.x - pip.location.x), Float(dip.location.y - pip.location.y))
-            let v3 = SIMD2<Float>(Float(tip.location.x - dip.location.x), Float(tip.location.y - dip.location.y))
-
-            let len1 = max(0.0001, hypot(v1.x, v1.y))
-            let len2 = max(0.0001, hypot(v2.x, v2.y))
-            let len3 = max(0.0001, hypot(v3.x, v3.y))
-
-            let dot1 = max(-1.0, min(1.0, (v1.x * v2.x + v1.y * v2.y) / (len1 * len2)))
-            let dot2 = max(-1.0, min(1.0, (v2.x * v3.x + v2.y * v3.y) / (len2 * len3)))
-
-            let totalAngle = acos(dot1) + acos(dot2)
-            let normalizedCurl = totalAngle / (Float.pi * 0.85)
-            return max(0.0, min(1.0, normalizedCurl))
-        }
-
-        let computeGeometricThumbCurl = { () -> Float in
-            guard let cmc = recognizedPoints[.thumbCMC],
-                  let mp = recognizedPoints[.thumbMP],
-                  let ip = recognizedPoints[.thumbIP],
-                  let tip = recognizedPoints[.thumbTip],
-                  let idxMCP = recognizedPoints[.indexMCP] else { return 0.0 }
-
-            let v1 = SIMD2<Float>(Float(mp.location.x - cmc.location.x), Float(mp.location.y - cmc.location.y))
-            let v2 = SIMD2<Float>(Float(ip.location.x - mp.location.x), Float(ip.location.y - mp.location.y))
-            let v3 = SIMD2<Float>(Float(tip.location.x - ip.location.x), Float(tip.location.y - ip.location.y))
-
-            let len1 = max(0.0001, hypot(v1.x, v1.y))
-            let len2 = max(0.0001, hypot(v2.x, v2.y))
-            let len3 = max(0.0001, hypot(v3.x, v3.y))
-
-            let dot1 = max(-1.0, min(1.0, (v1.x * v2.x + v1.y * v2.y) / (len1 * len2)))
-            let dot2 = max(-1.0, min(1.0, (v2.x * v3.x + v2.y * v3.y) / (len2 * len3)))
-
-            let angle = acos(dot1) + acos(dot2)
-            let distToIndex = hypot(Float(tip.location.x - idxMCP.location.x), Float(tip.location.y - idxMCP.location.y))
-            let opposition = max(0.0, min(1.0, (0.16 - distToIndex) / 0.10))
-
-            let rawCurl = (angle / (Float.pi * 0.70)) * 0.6 + opposition * 0.4
-            return max(0.0, min(1.0, rawCurl))
+        // 4. 指の屈曲度 (Finger Curls: 0.0 = パー, 1.0 = グー)
+        let calcCurl = { (mcpKey: VNHumanHandPoseObservation.JointName, tipKey: VNHumanHandPoseObservation.JointName) -> Float in
+            guard let mcp = points[mcpKey], let tip = points[tipKey] else { return 0.0 }
+            let dMCP = hypot(Float(mcp.location.x) - wx, Float(mcp.location.y) - wy)
+            let dTip = hypot(Float(tip.location.x) - wx, Float(tip.location.y) - wy)
+            // 手首から先端までの距離が手首からMCPまでの距離に近くなれば握っている
+            let ratio = dTip / max(0.001, dMCP)
+            let curl = (1.85 - ratio) / 1.0
+            return max(0.0, min(1.0, curl))
         }
 
         var rawCurls = FingerCurls()
-        rawCurls.thumb = computeGeometricThumbCurl()
-        rawCurls.index = computeGeometricCurl(.indexMCP, .indexPIP, .indexDIP, .indexTip)
-        rawCurls.middle = computeGeometricCurl(.middleMCP, .middlePIP, .middleDIP, .middleTip)
-        rawCurls.ring = computeGeometricCurl(.ringMCP, .ringPIP, .ringDIP, .ringTip)
-        rawCurls.pinky = computeGeometricCurl(.littleMCP, .littlePIP, .littleDIP, .littleTip)
+        rawCurls.thumb = calcCurl(.thumbMP, .thumbTip)
+        rawCurls.index = calcCurl(.indexMCP, .indexTip)
+        rawCurls.middle = calcCurl(.middleMCP, .middleTip)
+        rawCurls.ring = calcCurl(.ringMCP, .ringTip)
+        rawCurls.pinky = calcCurl(.littleMCP, .littleTip)
 
         let prevC = isLeft ? prevLeftCurls : prevRightCurls
-        let cAlpha: Float = 0.60
         let smoothCurls = FingerCurls(
-            thumb: prevC.thumb * (1 - cAlpha) + rawCurls.thumb * cAlpha,
-            index: prevC.index * (1 - cAlpha) + rawCurls.index * cAlpha,
-            middle: prevC.middle * (1 - cAlpha) + rawCurls.middle * cAlpha,
-            ring: prevC.ring * (1 - cAlpha) + rawCurls.ring * cAlpha,
-            pinky: prevC.pinky * (1 - cAlpha) + rawCurls.pinky * cAlpha
+            thumb: prevC.thumb * 0.4 + rawCurls.thumb * 0.6,
+            index: prevC.index * 0.4 + rawCurls.index * 0.6,
+            middle: prevC.middle * 0.4 + rawCurls.middle * 0.6,
+            ring: prevC.ring * 0.4 + rawCurls.ring * 0.6,
+            pinky: prevC.pinky * 0.4 + rawCurls.pinky * 0.6
         )
         if isLeft { prevLeftCurls = smoothCurls } else { prevRightCurls = smoothCurls }
 
-        // 5. 各指のSplay（開き）計算
-        let computeFingerSplay = { (tipKey: VNHumanHandPoseObservation.JointName, mcpKey: VNHumanHandPoseObservation.JointName, refMcpKey: VNHumanHandPoseObservation.JointName) -> Float in
-            guard let tip = recognizedPoints[tipKey], let mcp = recognizedPoints[mcpKey], let ref = recognizedPoints[refMcpKey] else { return 0.0 }
-            let dx = Float(tip.location.x - mcp.location.x)
-            let refDx = Float(ref.location.x - mcp.location.x)
-            let splay = (isLeft ? -1.0 : 1.0) * ((dx - refDx) * 5.0)
-            return max(-1.0, min(1.0, splay))
-        }
-
-        var splays = FingerSplays()
-        splays.thumb = isLeft ? -0.2 : 0.2
-        splays.index = computeFingerSplay(.indexTip, .indexMCP, .middleMCP)
-        splays.middle = 0.0
-        splays.ring = computeFingerSplay(.ringTip, .ringMCP, .middleMCP)
-        splays.pinky = computeFingerSplay(.littleTip, .littleMCP, .middleMCP)
+        // 5. 正準骨格 joints (手首のみ有効、残り20関節は安全な標準オフセット)
+        let wristBone = BoneTransform(
+            position: Vector3f(x: smoothPos.x, y: smoothPos.y, z: smoothPos.z),
+            orientation: wristQuat
+        )
+        let identityBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
 
         let tupleJoints = (
-            bones[0], bones[1], bones[2], bones[3], bones[4],
-            bones[5], bones[6], bones[7], bones[8], bones[9],
-            bones[10], bones[11], bones[12], bones[13], bones[14],
-            bones[15], bones[16], bones[17], bones[18], bones[19], bones[20]
+            wristBone, identityBone, identityBone, identityBone, identityBone,
+            identityBone, identityBone, identityBone, identityBone, identityBone,
+            identityBone, identityBone, identityBone, identityBone, identityBone,
+            identityBone, identityBone, identityBone, identityBone, identityBone, identityBone
         )
-
-        let controllerInput = GameControllerManager.shared.getInputData(for: chirality)
 
         return HandPacketData(
             chirality: chirality,
@@ -471,12 +208,51 @@ class ARHandTrackerManager: NSObject, ARSessionDelegate, ObservableObject {
             isPinching: isPinching,
             pinchDistance: pinchDist,
             curls: smoothCurls,
-            splays: splays,
+            splays: FingerSplays(),
             joints: tupleJoints,
-            controller: controllerInput
+            controller: GameControllerManager.shared.getInputData(for: chirality)
         )
+    }
+
+    private func createBaseHandData(chirality: UInt32) -> HandPacketData {
+        let isLeft = (chirality == 0)
+        let defaultPos = Vector3f(x: isLeft ? -0.18 : 0.18, y: -0.15, z: -0.45)
+        let wristBone = BoneTransform(position: defaultPos, orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
+        let identityBone = BoneTransform(position: Vector3f(x: 0, y: 0, z: 0), orientation: Quaternionf(w: 1, x: 0, y: 0, z: 0))
+        let tupleJoints = (
+            wristBone, identityBone, identityBone, identityBone, identityBone,
+            identityBone, identityBone, identityBone, identityBone, identityBone,
+            identityBone, identityBone, identityBone, identityBone, identityBone,
+            identityBone, identityBone, identityBone, identityBone, identityBone, identityBone
+        )
+        return HandPacketData(
+            chirality: chirality,
+            isTracked: 1,
+            isPinching: 0,
+            pinchDistance: 1.0,
+            curls: FingerCurls(),
+            splays: FingerSplays(),
+            joints: tupleJoints,
+            controller: GameControllerManager.shared.getInputData(for: chirality)
+        )
+    }
+
+    private func applyControllerInput(handData: inout HandPacketData, input: ControllerInputData, isLeft: Bool) {
+        handData.controller = input
+        if input.isConnected == 1 {
+            handData.curls.index = input.triggerValue
+            handData.curls.middle = input.gripValue
+            handData.curls.ring = input.gripValue
+            handData.curls.pinky = input.gripValue
+            let isThumbBusy = (input.buttonMask != 0) || (abs(input.stickX) > 0.08) || (abs(input.stickY) > 0.08)
+            handData.curls.thumb = isThumbBusy ? 0.60 : 0.15
+        }
     }
 }
 
-
-
+private extension SIMD3 where Scalar == Float {
+    var normalized: SIMD3<Float> {
+        let len = simd_length(self)
+        return len > 0.0001 ? self / len : SIMD3<Float>(0, 0, 1)
+    }
+}
